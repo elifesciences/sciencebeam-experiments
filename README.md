@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 Convert _Layout XML_ produced by Grobid's fork of [pdf2xml or pdftoxml](https://github.com/kermitt2/pdf2xml) to SVG.
 
-Because SVG doesn't support multiple pages yet, seperate files will be created.
+Because SVG doesn't support multiple pages yet, separate files will be created.
 
 For example to convert a PDF to LXML you may run:
 ```bash
