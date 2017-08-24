@@ -56,14 +56,29 @@ def main():
   for page_index, page in enumerate(lxml_root.xpath('//DOCUMENT/PAGE')):
     svg_root = etree.Element(SVG_DOC, nsmap=SVG_NSMAP)
     for token in page.xpath('./TEXT/TOKEN'):
+      x = float(token.attrib.get('x'))
+      y = float(token.attrib.get('y'))
+      height = float(token.attrib.get('height'))
+      base = float(token.attrib.get('base', y))
+      y_center = y + height / 2.0
+      attrib = {
+        'x': x,
+        'y': base,
+        'font-size': token.attrib.get('font-size'),
+        'font-family': token.attrib.get('font-name'),
+        'fill': token.attrib.get('font-color')
+      }
+      angle = float(token.attrib.get('angle', '0'))
+      if token.attrib.get('rotation') == '1' and angle == 90.0:
+        attrib['x'] = '0'
+        attrib['y'] = '0'
+        attrib['transform'] = 'translate({x} {y}) rotate({angle})'.format(
+          x=x,
+          y=y_center,
+          angle=-angle
+        )
       svg_root.append(
-        _create_xml_node(SVG_TEXT, token.text, attrib={
-          'x': token.attrib.get('x'),
-          'y': token.attrib.get('base'),
-          'font-size': token.attrib.get('font-size'),
-          'font-family': token.attrib.get('font-name'),
-          'fill': token.attrib.get('font-color')
-        })
+        _create_xml_node(SVG_TEXT, token.text, attrib=attrib)
       )
     svg_filename = svg_filename_pattern.format(1 + page_index)
     logger.info('writing to: %s', svg_filename)
