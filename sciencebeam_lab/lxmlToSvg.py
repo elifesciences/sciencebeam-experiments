@@ -45,15 +45,8 @@ def parse_args(argv=None):
   args = parser.parse_args(argv)
   return args
 
-def main():
-  logger = get_logger()
-  args = parse_args()
-  svg_filename_pattern = args.svg_path
-  if not svg_filename_pattern:
-    svg_filename_pattern = svg_pattern_for_lxml_path(args.lxml_path)
-  logger.debug('svg_filename_pattern: %s', svg_filename_pattern)
-  lxml_root = etree.parse(args.lxml_path).getroot()
-  for page_index, page in enumerate(lxml_root.xpath('//DOCUMENT/PAGE')):
+def iter_svg_pages_for_lxml(lxml_root):
+  for page in lxml_root.xpath('//DOCUMENT/PAGE'):
     svg_root = etree.Element(SVG_DOC, nsmap=SVG_NSMAP)
     for token in page.xpath('./TEXT/TOKEN'):
       x = float(token.attrib.get('x'))
@@ -80,6 +73,17 @@ def main():
       svg_root.append(
         _create_xml_node(SVG_TEXT, token.text, attrib=attrib)
       )
+    yield svg_root
+
+def main():
+  logger = get_logger()
+  args = parse_args()
+  svg_filename_pattern = args.svg_path
+  if not svg_filename_pattern:
+    svg_filename_pattern = svg_pattern_for_lxml_path(args.lxml_path)
+  logger.debug('svg_filename_pattern: %s', svg_filename_pattern)
+  lxml_root = etree.parse(args.lxml_path).getroot()
+  for page_index, svg_root in enumerate(iter_svg_pages_for_lxml(lxml_root)):
     svg_filename = svg_filename_pattern.format(1 + page_index)
     logger.info('writing to: %s', svg_filename)
     with open(svg_filename, 'wb') as f:
