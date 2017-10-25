@@ -8,11 +8,14 @@ SVG_NS = 'http://www.w3.org/2000/svg'
 SVG_NS_PREFIX = '{' + SVG_NS + '}'
 SVG_DOC = SVG_NS_PREFIX + 'svg'
 SVG_TEXT = SVG_NS_PREFIX + 'text'
+SVG_G = SVG_NS_PREFIX + 'g'
 
 SVG_NSMAP = {
   None : SVG_NS
 }
 
+class SvgStyleClasses(object):
+  LINE = 'line'
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -48,31 +51,36 @@ def parse_args(argv=None):
 def iter_svg_pages_for_lxml(lxml_root):
   for page in lxml_root.xpath('//DOCUMENT/PAGE'):
     svg_root = etree.Element(SVG_DOC, nsmap=SVG_NSMAP)
-    for token in page.xpath('./TEXT/TOKEN'):
-      x = float(token.attrib.get('x'))
-      y = float(token.attrib.get('y'))
-      height = float(token.attrib.get('height'))
-      base = float(token.attrib.get('base', y))
-      y_center = y + height / 2.0
-      attrib = {
-        'x': x,
-        'y': base,
-        'font-size': token.attrib.get('font-size'),
-        'font-family': token.attrib.get('font-name'),
-        'fill': token.attrib.get('font-color')
-      }
-      angle = float(token.attrib.get('angle', '0'))
-      if token.attrib.get('rotation') == '1' and angle == 90.0:
-        attrib['x'] = '0'
-        attrib['y'] = '0'
-        attrib['transform'] = 'translate({x} {y}) rotate({angle})'.format(
-          x=x,
-          y=y_center,
-          angle=-angle
+    for text in page.xpath('./TEXT'):
+      svg_g = etree.Element(SVG_G, nsmap=SVG_NSMAP, attrib={
+        'class': SvgStyleClasses.LINE
+      })
+      for token in text.xpath('./TOKEN'):
+        x = float(token.attrib.get('x'))
+        y = float(token.attrib.get('y'))
+        height = float(token.attrib.get('height'))
+        base = float(token.attrib.get('base', y))
+        y_center = y + height / 2.0
+        attrib = {
+          'x': x,
+          'y': base,
+          'font-size': token.attrib.get('font-size'),
+          'font-family': token.attrib.get('font-name'),
+          'fill': token.attrib.get('font-color')
+        }
+        angle = float(token.attrib.get('angle', '0'))
+        if token.attrib.get('rotation') == '1' and angle == 90.0:
+          attrib['x'] = '0'
+          attrib['y'] = '0'
+          attrib['transform'] = 'translate({x} {y}) rotate({angle})'.format(
+            x=x,
+            y=y_center,
+            angle=-angle
+          )
+        svg_g.append(
+          _create_xml_node(SVG_TEXT, token.text, attrib=attrib)
         )
-      svg_root.append(
-        _create_xml_node(SVG_TEXT, token.text, attrib=attrib)
-      )
+      svg_root.append(svg_g)
     yield svg_root
 
 def main():

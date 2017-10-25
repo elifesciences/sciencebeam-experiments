@@ -2,7 +2,8 @@ from lxml.builder import E
 
 from sciencebeam_lab.lxmlToSvg import (
   iter_svg_pages_for_lxml,
-  SVG_TEXT
+  SVG_TEXT,
+  SVG_G
 )
 
 SOME_TEXT = "some text"
@@ -81,7 +82,7 @@ class TestIterSvgPagesForLxml(object):
     svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
     assert len(svg_pages) == 1
     first_page = svg_pages[0]
-    svg_text = first_page.find(SVG_TEXT)
+    svg_text = first_page.find('.//' + SVG_TEXT)
     assert svg_text is not None
     assert svg_text.text == SOME_TEXT
     assert float(svg_text.attrib[SVG.X]) == float(SOME_X)
@@ -106,5 +107,25 @@ class TestIterSvgPagesForLxml(object):
     svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
     assert len(svg_pages) == 1
     first_page = svg_pages[0]
-    svg_text = first_page.find(SVG_TEXT)
+    svg_text = first_page.find('.//' + SVG_TEXT)
     assert float(svg_text.attrib[SVG.Y]) == float(SOME_BASE)
+
+  def test_should_keep_text_block_structure(self):
+    lxml_root = E.DOCUMENT(
+      E.PAGE(
+        E.TEXT(
+          E.TOKEN(
+            SOME_TEXT,
+            dict_extend(COMMON_LXML_TOKEN_ATTRIBS, {
+              LXML.BASE: SOME_BASE
+            })
+          )
+        )
+      )
+    )
+    svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
+    assert len(svg_pages) == 1
+    first_page = svg_pages[0]
+    svg_text = first_page.find('.//' + SVG_TEXT)
+    svg_text_parent = svg_text.getparent()
+    assert svg_text_parent.tag == SVG_G
