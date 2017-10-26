@@ -1,10 +1,13 @@
 from lxml.builder import E
 
-from sciencebeam_lab.lxml_to_svg import (
-  iter_svg_pages_for_lxml,
+from sciencebeam_lab.svg_structured_document import (
   SVG_TEXT,
   SVG_G,
   SVG_DOC
+)
+
+from sciencebeam_lab.lxml_to_svg import (
+  iter_svg_pages_for_lxml
 )
 
 SOME_TEXT = "some text"

@@ -4,19 +4,21 @@ import os
 
 from lxml import etree
 
-SVG_NS = 'http://www.w3.org/2000/svg'
-SVG_NS_PREFIX = '{' + SVG_NS + '}'
-SVG_DOC = SVG_NS_PREFIX + 'svg'
-SVG_TEXT = SVG_NS_PREFIX + 'text'
-SVG_G = SVG_NS_PREFIX + 'g'
+from sciencebeam_lab.annotator import (
+  Annotator
+)
 
-SVG_NSMAP = {
-  None : SVG_NS
-}
+from sciencebeam_lab.svg_structured_document import (
+  SVG_TEXT,
+  SVG_G,
+  SVG_DOC,
+  SVG_NSMAP,
+  SvgStyleClasses
+)
 
-class SvgStyleClasses(object):
-  LINE = 'line'
-  BLOCK = 'block'
+from sciencebeam_lab.svg_structured_document import (
+  SvgStructuredDocument
+)
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -45,6 +47,10 @@ def parse_args(argv=None):
   parser.add_argument(
     '--svg-path', type=str, required=False,
     help='path to svg file'
+  )
+  parser.add_argument(
+    '--annotate', action='store_true', required=False,
+    help='enable annotation'
   )
   args = parser.parse_args(argv)
   return args
@@ -106,7 +112,15 @@ def main():
     svg_filename_pattern = svg_pattern_for_lxml_path(args.lxml_path)
   logger.debug('svg_filename_pattern: %s', svg_filename_pattern)
   lxml_root = etree.parse(args.lxml_path).getroot()
+
+  if args.annotate:
+    annotator = Annotator()
+  else:
+    annotator = None
+
   for page_index, svg_root in enumerate(iter_svg_pages_for_lxml(lxml_root)):
+    if annotator:
+      svg_root = annotator.annotate(SvgStructuredDocument(svg_root)).root
     svg_filename = svg_filename_pattern.format(1 + page_index)
     logger.info('writing to: %s', svg_filename)
     with open(svg_filename, 'wb') as f:
