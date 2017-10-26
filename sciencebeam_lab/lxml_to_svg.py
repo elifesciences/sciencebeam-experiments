@@ -20,6 +20,10 @@ from sciencebeam_lab.svg_structured_document import (
   SvgStructuredDocument
 )
 
+from sciencebeam_lab.visualize_svg_annotation import (
+  visualize_svg_annotations
+)
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -121,6 +125,7 @@ def main():
   for page_index, svg_root in enumerate(iter_svg_pages_for_lxml(lxml_root)):
     if annotator:
       svg_root = annotator.annotate(SvgStructuredDocument(svg_root)).root
+      svg_root = visualize_svg_annotations(svg_root)
     svg_filename = svg_filename_pattern.format(1 + page_index)
     logger.info('writing to: %s', svg_filename)
     with open(svg_filename, 'wb') as f:

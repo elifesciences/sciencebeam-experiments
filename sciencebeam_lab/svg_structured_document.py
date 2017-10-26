@@ -8,6 +8,8 @@ SVG_DOC = SVG_NS_PREFIX + 'svg'
 SVG_TEXT = SVG_NS_PREFIX + 'text'
 SVG_G = SVG_NS_PREFIX + 'g'
 
+SVG_TAG_ATTRIB = 'class'
+
 SVG_NSMAP = {
   None : SVG_NS
 }
@@ -37,4 +39,4 @@ class SvgStructuredDocument(AbstractStructuredDocument):
     return parent.text
 
   def set_tag(self, parent, tag):
-    parent.attrib['class'] = tag
+    parent.attrib[SVG_TAG_ATTRIB] = tag
