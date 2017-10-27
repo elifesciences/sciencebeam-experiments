@@ -28,8 +28,10 @@ class AbstractStructuredDocument(object):
     pass
 
 class SimpleToken(object):
-  def __init__(self, text, attrib):
+  def __init__(self, text, attrib=None):
     self.text = text
+    if attrib is None:
+      attrib = {}
     self.attrib = attrib
 
   def get_x(self):

@@ -1,11 +1,23 @@
+from abc import ABCMeta, abstractmethod
+
 from sciencebeam_lab.find_line_number import (
   find_line_number_tokens
 )
 
-class LineAnnotator(object):
-  def annotate(self, structured_document, tag='line_no'):
+class AbstractAnnotator(object):
+  __metaclass__ = ABCMeta
+
+  @abstractmethod
+  def annotate(self, structured_document):
+    pass
+
+class LineAnnotator(AbstractAnnotator):
+  def __init__(self, tag='line_no'):
+    self.tag = tag
+
+  def annotate(self, structured_document):
     for t in find_line_number_tokens(structured_document):
-      structured_document.set_tag(t, tag)
+      structured_document.set_tag(t, self.tag)
     return structured_document
 
 DEFAULT_ANNOTATORS = [
