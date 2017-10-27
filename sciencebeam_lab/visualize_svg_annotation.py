@@ -2,7 +2,7 @@ import hashlib
 
 from lxml import etree
 
-from svg_structured_document import (
+from sciencebeam_lab.svg_structured_document import (
   SVG_TAG_ATTRIB
 )
 
