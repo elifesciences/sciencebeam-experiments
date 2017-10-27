@@ -9,8 +9,8 @@ class LxmlStructuredDocument(AbstractStructuredDocument):
   def get_pages(self):
     return self.root.findall('.//PAGE')
 
-  def get_lines_of_page(self, parent):
-    return parent.findall('.//TEXT')
+  def get_lines_of_page(self, page):
+    return page.findall('.//TEXT')
 
   def get_tokens_of_line(self, line):
     return line.findall('./TOKEN')
@@ -20,6 +20,9 @@ class LxmlStructuredDocument(AbstractStructuredDocument):
 
   def get_text(self, parent):
     return parent.text
+
+  def get_tag(self, parent):
+    return parent.attrib.get('tag')
 
   def set_tag(self, parent, tag):
     parent.attrib['tag'] = tag

@@ -164,3 +164,23 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
     assert _get_tags_of_tokens(not_matching_tokens) == [None] * len(not_matching_tokens)
+
+  def test_should_not_annotate_pre_annotated_tokens_on_separate_lines(self):
+    line_no_tokens = [SimpleToken('1')]
+    line_no_tokens[0].set_tag('line_no')
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('1', TAG2),
+      TargetAnnotation('this is matching', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(line_no_tokens),
+      SimpleLine(matching_tokens)
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(line_no_tokens) == ['line_no'] * len(line_no_tokens)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)

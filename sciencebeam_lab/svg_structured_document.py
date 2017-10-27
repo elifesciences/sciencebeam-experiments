@@ -38,5 +38,8 @@ class SvgStructuredDocument(AbstractStructuredDocument):
   def get_text(self, parent):
     return parent.text
 
+  def get_tag(self, parent):
+    return parent.attrib.get(SVG_TAG_ATTRIB)
+
   def set_tag(self, parent, tag):
     parent.attrib[SVG_TAG_ATTRIB] = tag

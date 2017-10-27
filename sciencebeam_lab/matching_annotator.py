@@ -125,10 +125,21 @@ class MatchingAnnotator(AbstractAnnotator):
     pending_sequences = []
     for page in structured_document.get_pages():
       for line in structured_document.get_lines_of_page(page):
-        pending_sequences.append(SequenceWrapper(
-          structured_document,
-          structured_document.get_tokens_of_line(line)
-        ))
+        tokens = [
+          token
+          for token in structured_document.get_tokens_of_line(line)
+          if not structured_document.get_tag(token)
+        ]
+        if tokens:
+          get_logger().info(
+            'tokens without tag: %s (%s)',
+            [structured_document.get_text(token) for token in tokens],
+            [structured_document.get_tag(token) for token in tokens]
+          )
+          pending_sequences.append(SequenceWrapper(
+            structured_document,
+            tokens
+          ))
 
     for target_annotation in self.target_annotations:
       for m in find_best_matches(target_annotation.value, pending_sequences):

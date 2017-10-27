@@ -1,8 +1,8 @@
 from abc import ABCMeta, abstractmethod
 
-class AbstractStructuredDocument(object):
-  __metaclass__ = ABCMeta
+from six import with_metaclass
 
+class AbstractStructuredDocument(object, with_metaclass(ABCMeta)):
   @abstractmethod
   def get_pages(self):
     pass
@@ -21,6 +21,10 @@ class AbstractStructuredDocument(object):
 
   @abstractmethod
   def get_text(self, parent):
+    pass
+
+  @abstractmethod
+  def get_tag(self, parent):
     pass
 
   @abstractmethod
@@ -80,6 +84,9 @@ class SimpleStructuredDocument(AbstractStructuredDocument):
 
   def get_text(self, parent):
     return parent.get_text()
+
+  def get_tag(self, parent):
+    return parent.get_tag()
 
   def set_tag(self, parent, tag):
     return parent.set_tag(tag)
