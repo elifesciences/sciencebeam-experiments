@@ -1,3 +1,5 @@
+from lxml.builder import E
+
 from sciencebeam_lab.structured_document import (
   SimpleStructuredDocument,
   SimpleLine,
@@ -6,7 +8,8 @@ from sciencebeam_lab.structured_document import (
 
 from sciencebeam_lab.matching_annotator import (
   MatchingAnnotator,
-  TargetAnnotation
+  TargetAnnotation,
+  xml_root_to_target_annotations
 )
 
 from sciencebeam_lab.collection_utils import (
@@ -16,8 +19,66 @@ from sciencebeam_lab.collection_utils import (
 TAG1 = 'tag1'
 TAG2 = 'tag2'
 
+SOME_VALUE = 'some value'
+
 def _get_tags_of_tokens(tokens):
   return [t.get_tag() for t in tokens]
+
+class TestXmlRootToTargetAnnotations(object):
+  def test_should_return_empty_target_annotations_for_empty_xml(self):
+    xml_root = E.article(
+    )
+    xml_mapping = {
+      'article': {
+        'title': 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert target_annotations == []
+
+  def test_should_return_empty_target_annotations_for_no_matching_annotations(self):
+    xml_root = E.article(
+      E.other(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert target_annotations == []
+
+  def test_should_return_matching_target_annotations(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert len(target_annotations) == 1
+    assert target_annotations[0].name == TAG1
+    assert target_annotations[0].value == SOME_VALUE
+
+  def test_should_return_full_text(self):
+    xml_root = E.article(
+      E.title(
+        'some ',
+        E.other('embedded'),
+        ' text'
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert len(target_annotations) == 1
+    assert target_annotations[0].name == TAG1
+    assert target_annotations[0].value == 'some embedded text'
 
 class TestMatchingAnnotator(object):
   def test_should_not_fail_on_empty_document(self):

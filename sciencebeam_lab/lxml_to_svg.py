@@ -5,7 +5,14 @@ import os
 from lxml import etree
 
 from sciencebeam_lab.annotator import (
-  Annotator
+  Annotator,
+  DEFAULT_ANNOTATORS
+)
+
+from sciencebeam_lab.matching_annotator import (
+  MatchingAnnotator,
+  parse_xml_mapping,
+  xml_root_to_target_annotations
 )
 
 from sciencebeam_lab.svg_structured_document import (
@@ -51,6 +58,14 @@ def parse_args(argv=None):
   parser.add_argument(
     '--svg-path', type=str, required=False,
     help='path to svg file'
+  )
+  parser.add_argument(
+    '--xml-path', type=str, required=False,
+    help='path to xml file'
+  )
+  parser.add_argument(
+    '--xml-mapping-path', type=str, default='annot-xml-front.conf',
+    help='path to xml mapping file'
   )
   parser.add_argument(
     '--annotate', action='store_true', required=False,
@@ -118,7 +133,15 @@ def main():
   lxml_root = etree.parse(args.lxml_path).getroot()
 
   if args.annotate:
-    annotator = Annotator()
+    annotators = DEFAULT_ANNOTATORS
+    if args.xml_path:
+      xml_mapping = parse_xml_mapping(args.xml_mapping_path)
+      target_annotations = xml_root_to_target_annotations(
+        etree.parse(args.xml_path).getroot(),
+        xml_mapping
+      )
+      annotators = annotators + [MatchingAnnotator(target_annotations)]
+    annotator = Annotator(annotators)
   else:
     annotator = None
 
