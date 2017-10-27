@@ -72,3 +72,34 @@ class TestMatchingAnnotator(object):
     ])
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
+  def test_should_not_annotate_similar_sequence_multiple_times(self):
+    matching_tokens_per_line = [
+      [
+        SimpleToken('this'),
+        SimpleToken('is'),
+        SimpleToken('matching')
+      ],
+      [
+        SimpleToken('and'),
+        SimpleToken('continues'),
+        SimpleToken('here')
+      ]
+    ]
+    not_matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+
+    matching_tokens = flatten(matching_tokens_per_line)
+    target_annotations = [
+      TargetAnnotation('this is matching and continues here', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens)
+      for tokens in matching_tokens_per_line + [not_matching_tokens]
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(not_matching_tokens) == [None] * len(not_matching_tokens)
