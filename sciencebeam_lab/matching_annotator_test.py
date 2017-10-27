@@ -9,6 +9,10 @@ from sciencebeam_lab.matching_annotator import (
   TargetAnnotation
 )
 
+from sciencebeam_lab.collection_utils import (
+  flatten
+)
+
 TAG1 = 'tag1'
 TAG2 = 'tag2'
 
@@ -45,3 +49,26 @@ class TestMatchingAnnotator(object):
     doc = SimpleStructuredDocument(lines=[SimpleLine(not_matching_tokens)])
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(not_matching_tokens) == [None] * len(not_matching_tokens)
+
+  def test_should_annotate_exactly_matching_across_multiple_lines(self):
+    matching_tokens_per_line = [
+      [
+        SimpleToken('this'),
+        SimpleToken('is'),
+        SimpleToken('matching')
+      ],
+      [
+        SimpleToken('and'),
+        SimpleToken('continues'),
+        SimpleToken('here')
+      ]
+    ]
+    matching_tokens = flatten(matching_tokens_per_line)
+    target_annotations = [
+      TargetAnnotation('this is matching and continues here', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens) for tokens in matching_tokens_per_line
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
