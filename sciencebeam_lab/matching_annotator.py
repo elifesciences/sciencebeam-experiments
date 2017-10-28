@@ -28,34 +28,81 @@ class TargetAnnotation(object):
 class SequenceWrapper(object):
   def __init__(self, structured_document, tokens):
     self.tokens = tokens
-    self.tokens_as_str = ' '.join([structured_document.get_text(t) or '' for t in tokens])
+    self.token_str_list = [structured_document.get_text(t) or '' for t in tokens]
+    self.tokens_as_str = ' '.join(self.token_str_list)
+
+  def tokens_between(self, index_range):
+    start, end = index_range
+    i = 0
+    for token, token_str in zip(self.tokens, self.token_str_list):
+      if i >= end:
+        break
+      token_end = i + len(token_str)
+      if token_end > start:
+        yield token
+      i = token_end + 1
 
   def __str__(self):
     return self.tokens_as_str
 
+@python_2_unicode_compatible
 class SequenceMatch(object):
-  def __init__(self, sequence, choice, index_range):
-    self.sequence = sequence
-    self.choice = choice
-    self.index_range = index_range
+  def __init__(self, seq1, seq2, index1_range, index2_range):
+    self.seq1 = seq1
+    self.seq2 = seq2
+    self.index1_range = index1_range
+    self.index2_range = index2_range
+
+  def __str__(self):
+    return u"SequenceMatch('{}'[{}:{}], '{}'[{}:{}])".format(
+      self.seq1,
+      self.index1_range[0],
+      self.index1_range[1],
+      self.seq2,
+      self.index2_range[0],
+      self.index2_range[1]
+    )
 
 def find_best_matches(sequence, choices):
   start_index = 0
   s1 = text(sequence)
   for choice in choices:
     choice_str = text(choice)
-    i = s1.find(choice_str, start_index)
-    get_logger().debug('choice: %s - %s - %d', s1, choice, i)
-    if i >= 0:
-      end_index = i + len(choice_str)
-      get_logger().debug('found match: %s - %d:%d', s1, i, end_index)
-      yield SequenceMatch(sequence, choice, (i, end_index))
-      if end_index >= len(s1):
-        get_logger().debug('end reached: %d >= %d', end_index, len(s1))
-        break
-      else:
-        start_index = end_index
-        get_logger().debug('setting start index to: %d', start_index)
+    if len(s1) - start_index >= len(choice_str):
+      i = s1.find(choice_str, start_index)
+      get_logger().debug('choice: %s - %s - %d', s1, choice, i)
+      if i >= 0:
+        index1_start = i
+        index1_end = i + len(choice_str)
+        m = SequenceMatch(
+          sequence,
+          choice,
+          (index1_start, index1_end),
+          (0, len(choice_str))
+        )
+        get_logger().debug('found match: %s', m)
+        yield m
+        if index1_end >= len(s1):
+          get_logger().debug('end reached: %d >= %d', index1_end, len(s1))
+          break
+        else:
+          start_index = index1_end
+          get_logger().debug('setting start index to: %d', start_index)
+    else:
+      s1_sub = s1[start_index:]
+      i = choice_str.find(s1_sub)
+      get_logger().debug('choice: %s - %s - %d (in right)', s1_sub, choice, i)
+      if i >= 0:
+        index2_start = start_index + i
+        index2_end = index2_start + len(s1_sub)
+        m = SequenceMatch(
+          sequence,
+          choice,
+          (start_index, start_index + len(s1_sub)),
+          (index2_start, index2_end)
+        )
+        get_logger().debug('found match: %s', m)
+        yield m
 
 def parse_xml_mapping(xml_mapping_filename):
   with open(xml_mapping_filename, 'r') as f:
@@ -131,10 +178,9 @@ class MatchingAnnotator(AbstractAnnotator):
           if not structured_document.get_tag(token)
         ]
         if tokens:
-          get_logger().info(
-            'tokens without tag: %s (%s)',
-            [structured_document.get_text(token) for token in tokens],
-            [structured_document.get_tag(token) for token in tokens]
+          get_logger().debug(
+            'tokens without tag: %s',
+            [structured_document.get_text(token) for token in tokens]
           )
           pending_sequences.append(SequenceWrapper(
             structured_document,
@@ -143,7 +189,14 @@ class MatchingAnnotator(AbstractAnnotator):
 
     for target_annotation in self.target_annotations:
       for m in find_best_matches(target_annotation.value, pending_sequences):
-        for token in m.choice.tokens:
+        choice = m.seq2
+        matching_tokens = list(choice.tokens_between(m.index2_range))
+        get_logger().debug(
+          'matching_tokens: %s %s',
+          [structured_document.get_text(token) for token in matching_tokens],
+          m.index2_range
+        )
+        for token in matching_tokens:
           structured_document.set_tag(
             token,
             target_annotation.name
