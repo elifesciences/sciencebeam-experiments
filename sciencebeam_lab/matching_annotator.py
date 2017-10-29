@@ -1,6 +1,7 @@
 import logging
 from configparser import ConfigParser
 from builtins import str as text
+from difflib import SequenceMatcher
 
 from future.utils import python_2_unicode_compatible
 
@@ -63,22 +64,62 @@ class SequenceMatch(object):
       self.index2_range[1]
     )
 
-def find_best_matches(sequence, choices):
+class FuzzyMatchResult(object):
+  def __init__(self, a, b, matching_blocks):
+    self.a = a
+    self.b = b
+    self.matching_blocks = matching_blocks
+
+  def match_count(self):
+    return sum(triple[-1] for triple in self.matching_blocks)
+
+  def a_ratio(self):
+    return self.match_count() / len(self.a)
+
+  def b_ratio(self):
+    return self.match_count() / len(self.b)
+
+  def a_index_range(self):
+    return (
+      min(a for a, _, size in self.matching_blocks if size),
+      max(a + size for a, _, size in self.matching_blocks if size)
+    )
+
+  def b_index_range(self):
+    return (
+      min(b for _, b, size in self.matching_blocks if size),
+      max(b + size for _, b, size in self.matching_blocks if size)
+    )
+
+  def __str__(self):
+    return 'FuzzyMatchResult(matching_blocks={}, b_ratio={})'.format(
+      self.matching_blocks, self.b_ratio()
+    )
+
+def fuzzy_match(a, b):
+  sm = SequenceMatcher(None, a, b)
+  matching_blocks = sm.get_matching_blocks()
+  return FuzzyMatchResult(a, b, matching_blocks)
+
+def find_best_matches(sequence, choices, threshold=0.9):
   start_index = 0
   s1 = text(sequence)
   for choice in choices:
     choice_str = text(choice)
+    if not choice_str:
+      return
     if len(s1) - start_index >= len(choice_str):
-      i = s1.find(choice_str, start_index)
-      get_logger().debug('choice: %s - %s - %d', s1, choice, i)
-      if i >= 0:
-        index1_start = i
-        index1_end = i + len(choice_str)
+      m = fuzzy_match(s1, choice_str)
+      get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
+      if m.b_ratio() >= threshold:
+        index1_range = m.a_index_range()
+        index2_range = m.b_index_range()
+        index1_end = index1_range[1]
         m = SequenceMatch(
           sequence,
           choice,
-          (index1_start, index1_end),
-          (0, len(choice_str))
+          index1_range,
+          index2_range
         )
         get_logger().debug('found match: %s', m)
         yield m
@@ -90,11 +131,13 @@ def find_best_matches(sequence, choices):
           get_logger().debug('setting start index to: %d', start_index)
     else:
       s1_sub = s1[start_index:]
-      i = choice_str.find(s1_sub)
-      get_logger().debug('choice: %s - %s - %d (in right)', s1_sub, choice, i)
-      if i >= 0:
-        index2_start = start_index + i
-        index2_end = index2_start + len(s1_sub)
+      m = fuzzy_match(choice_str, s1_sub)
+      get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
+      if m.b_ratio() >= threshold:
+        index2_rel_range = m.a_index_range()
+        get_logger().debug('index2_rel_range: %s, start_index: %d', index2_rel_range, start_index)
+        index2_start = start_index + index2_rel_range[0]
+        index2_end = start_index + index2_rel_range[1]
         m = SequenceMatch(
           sequence,
           choice,

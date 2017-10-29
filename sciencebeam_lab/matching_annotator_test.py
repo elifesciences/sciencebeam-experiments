@@ -85,6 +85,15 @@ class TestMatchingAnnotator(object):
     doc = SimpleStructuredDocument(lines=[])
     MatchingAnnotator([]).annotate(doc)
 
+  def test_should_not_fail_on_empty_line_with_blank_token(self):
+    target_annotations = [
+      TargetAnnotation('this is. matching', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine([
+      SimpleToken('')
+    ])])
+    MatchingAnnotator(target_annotations).annotate(doc)
+
   def test_should_annotate_exactly_matching(self):
     matching_tokens = [
       SimpleToken('this'),
@@ -93,6 +102,19 @@ class TestMatchingAnnotator(object):
     ]
     target_annotations = [
       TargetAnnotation('this is matching', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
+  def test_should_annotate_exactly_fuzzily_matching(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('this is. matching', TAG1)
     ]
     doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
     MatchingAnnotator(target_annotations).annotate(doc)
@@ -199,6 +221,29 @@ class TestMatchingAnnotator(object):
     ]
     target_annotations = [
       TargetAnnotation('this is matching', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(pre_tokens + matching_tokens + post_tokens)
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(pre_tokens) == [None] * len(pre_tokens)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(post_tokens) == [None] * len(post_tokens)
+
+  def test_should_annotate_shorter_target_annotation_fuzzily(self):
+    pre_tokens = [
+      SimpleToken('pre')
+    ]
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    post_tokens = [
+      SimpleToken('post')
+    ]
+    target_annotations = [
+      TargetAnnotation('this is. matching', TAG1)
     ]
     doc = SimpleStructuredDocument(lines=[
       SimpleLine(pre_tokens + matching_tokens + post_tokens)
