@@ -1,9 +1,12 @@
 import logging
 from configparser import ConfigParser
 from builtins import str as text
-from difflib import SequenceMatcher
 
 from future.utils import python_2_unicode_compatible
+
+from sciencebeam_lab.utils.SequenceMatcher import (
+  SequenceMatcher
+)
 
 from sciencebeam_lab.xml_utils import (
   get_text_content,
