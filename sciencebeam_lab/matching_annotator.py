@@ -188,12 +188,12 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   target_annotations = []
   for k in field_names:
     for e in xml_root.xpath(mapping[k]):
-      text = (get_text_content(
+      text_content = (get_text_content(
         e
       ) or '').strip()
-      if len(text) > 0:
+      if text_content:
         target_annotations.append(
-          TargetAnnotation(text, k)
+          TargetAnnotation(text_content, k)
         )
   target_annotations = (
     target_annotations +
