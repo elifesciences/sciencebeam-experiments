@@ -145,9 +145,13 @@ def main():
   else:
     annotator = None
 
-  for page_index, svg_root in enumerate(iter_svg_pages_for_lxml(lxml_root)):
+  if annotator:
+    svg_roots = list(iter_svg_pages_for_lxml(lxml_root))
+    annotator.annotate(SvgStructuredDocument(svg_roots))
+  else:
+    svg_roots = iter_svg_pages_for_lxml(lxml_root)
+  for page_index, svg_root in enumerate(svg_roots):
     if annotator:
-      svg_root = annotator.annotate(SvgStructuredDocument(svg_root)).root
       svg_root = visualize_svg_annotations(svg_root)
     svg_filename = svg_filename_pattern.format(1 + page_index)
     logger.info('writing to: %s', svg_filename)

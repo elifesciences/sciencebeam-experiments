@@ -20,11 +20,14 @@ class SvgStyleClasses(object):
   LINE_NO = 'line_no'
 
 class SvgStructuredDocument(AbstractStructuredDocument):
-  def __init__(self, root):
-    self.root = root
+  def __init__(self, root_or_roots):
+    if isinstance(root_or_roots, list):
+      self.page_roots = root_or_roots
+    else:
+      self.page_roots = [root_or_roots]
 
   def get_pages(self):
-    return [self.root]
+    return self.page_roots
 
   def get_lines_of_page(self, page):
     return page.findall('.//{}[@class="{}"]'.format(SVG_G, SvgStyleClasses.LINE))
