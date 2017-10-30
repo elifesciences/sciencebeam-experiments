@@ -34,13 +34,13 @@ def find_line_number_tokens(structured_document):
       for token in line_number_candidates:
         x = float(token.attrib['x'])
         if abs(x - most_common_x) < 10:
-          get_logger().info(
+          get_logger().debug(
             'line no token: most_common_x=%s, token_x=%s, token=%s',
             most_common_x, structured_document.get_x(token), structured_document.get_text(token)
           )
           yield token
         else:
-          get_logger().info(
+          get_logger().debug(
             'line no exeeds threshold token: most_common_x=%s, token_x=%s, token=%s',
             most_common_x, structured_document.get_x(token), structured_document.get_text(token)
           )
