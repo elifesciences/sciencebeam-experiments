@@ -72,6 +72,9 @@ class FuzzyMatchResult(object):
     self.a = a
     self.b = b
     self.matching_blocks = matching_blocks
+    self.non_empty_matching_blocks = [x for x in self.matching_blocks if x[-1]]
+    self._a_index_range = None
+    self._b_index_range = None
 
   def match_count(self):
     return sum(triple[-1] for triple in self.matching_blocks)
@@ -82,17 +85,36 @@ class FuzzyMatchResult(object):
   def b_ratio(self):
     return self.match_count() / len(self.b)
 
+  def b_gap_ratio(self):
+    """
+    Calculates the ratio of matches vs the length of b,
+    but also adds any gaps / mismatches within a.
+    """
+    a_index_range = self.a_index_range()
+    a_match_len = a_index_range[1] - a_index_range[0]
+    match_count = self.match_count()
+    a_gaps = a_match_len - match_count
+    return match_count / (len(self.b) + a_gaps)
+
   def a_index_range(self):
-    return (
-      min(a for a, _, size in self.matching_blocks if size),
-      max(a + size for a, _, size in self.matching_blocks if size)
-    )
+    if not self.non_empty_matching_blocks:
+      return (0, 0)
+    if not self._a_index_range:
+      self._a_index_range = (
+        min(a for a, _, size in self.non_empty_matching_blocks),
+        max(a + size for a, _, size in self.non_empty_matching_blocks)
+      )
+    return self._a_index_range
 
   def b_index_range(self):
-    return (
-      min(b for _, b, size in self.matching_blocks if size),
-      max(b + size for _, b, size in self.matching_blocks if size)
-    )
+    if not self.non_empty_matching_blocks:
+      return (0, 0)
+    if not self._b_index_range:
+      self._b_index_range = (
+        min(b for _, b, size in self.non_empty_matching_blocks),
+        max(b + size for _, b, size in self.non_empty_matching_blocks)
+      )
+    return self._b_index_range
 
   def __str__(self):
     return 'FuzzyMatchResult(matching_blocks={}, b_ratio={})'.format(
@@ -114,7 +136,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
     if len(s1) - start_index >= len(choice_str):
       m = fuzzy_match(s1, choice_str)
       get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
-      if m.b_ratio() >= threshold:
+      if m.b_gap_ratio() >= threshold:
         index1_range = m.a_index_range()
         index2_range = m.b_index_range()
         index1_end = index1_range[1]
@@ -136,7 +158,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
       s1_sub = s1[start_index:]
       m = fuzzy_match(choice_str, s1_sub)
       get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
-      if m.b_ratio() >= threshold:
+      if m.b_gap_ratio() >= threshold:
         index2_rel_range = m.a_index_range()
         get_logger().debug('index2_rel_range: %s, start_index: %d', index2_rel_range, start_index)
         index2_start = start_index + index2_rel_range[0]
@@ -236,6 +258,7 @@ class MatchingAnnotator(AbstractAnnotator):
           ))
 
     for target_annotation in self.target_annotations:
+      get_logger().debug('target annotation: %s', target_annotation.name)
       for m in find_best_matches(target_annotation.value, pending_sequences):
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))

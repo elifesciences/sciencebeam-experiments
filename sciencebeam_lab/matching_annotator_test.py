@@ -107,7 +107,7 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
-  def test_should_annotate_exactly_fuzzily_matching(self):
+  def test_should_annotate_fuzzily_matching(self):
     matching_tokens = [
       SimpleToken('this'),
       SimpleToken('is'),
@@ -119,6 +119,19 @@ class TestMatchingAnnotator(object):
     doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
+  def test_should_not_annotate_fuzzily_matching_with_many_differences(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('txhxixsx ixsx mxaxtxcxhxixnxgx', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [None] * len(matching_tokens)
 
   def test_should_not_annotate_not_matching(self):
     not_matching_tokens = [
