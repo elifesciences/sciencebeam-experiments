@@ -127,6 +127,12 @@ def fuzzy_match(a, b):
   return FuzzyMatchResult(a, b, matching_blocks)
 
 def find_best_matches(sequence, choices, threshold=0.9):
+  if isinstance(sequence, list):
+    get_logger().debug('found sequence list: %s', sequence)
+    for s in sequence:
+      for m in find_best_matches(s, choices, threshold=threshold):
+        yield m
+    return
   start_index = 0
   s1 = text(sequence)
   for choice in choices:
