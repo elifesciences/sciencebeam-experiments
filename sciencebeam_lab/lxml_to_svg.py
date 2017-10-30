@@ -71,6 +71,10 @@ def parse_args(argv=None):
     '--annotate', action='store_true', required=False,
     help='enable annotation'
   )
+  parser.add_argument(
+    '--debug', action='store_true', required=False,
+    help='enable debug logging'
+  )
   args = parser.parse_args(argv)
   return args
 
@@ -123,9 +127,8 @@ def iter_svg_pages_for_lxml(lxml_root):
         svg_root.append(svg_g)
     yield svg_root
 
-def main():
+def convert(args):
   logger = get_logger()
-  args = parse_args()
   svg_filename_pattern = args.svg_path
   if not svg_filename_pattern:
     svg_filename_pattern = svg_pattern_for_lxml_path(args.lxml_path)
@@ -158,7 +161,13 @@ def main():
     with open(svg_filename, 'wb') as f:
       etree.ElementTree(svg_root).write(f, pretty_print=True)
 
-if __name__ == "__main__":
-  logging.basicConfig(level=logging.INFO)
+def main():
+  args = parse_args()
+  if args.debug:
+    logging.basicConfig(level=logging.DEBUG)
+  else:
+    logging.basicConfig(level=logging.INFO)
+  convert(args)
 
+if __name__ == "__main__":
   main()
