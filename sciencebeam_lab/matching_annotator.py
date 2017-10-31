@@ -11,6 +11,10 @@ from sciencebeam_lab.utils.WordSequenceMatcher import (
   WordSequenceMatcher
 )
 
+from sciencebeam_lab.collection_utils import (
+  flatten
+)
+
 from sciencebeam_lab.xml_utils import (
   get_text_content,
   get_text_content_list
@@ -219,11 +223,24 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
       get_text_content(e.find('surname'))
     ) for e in xml_root.xpath('front/article-meta/contrib-group/contrib/name')
   ]
-  author_aff = (
-    get_text_content_list(xml_root.xpath('front/article-meta/contrib-group/aff')) +
-    get_text_content_list(xml_root.xpath('front/article-meta/contrib-group/contrib/aff')) +
-    get_text_content_list(xml_root.xpath('front/article-meta/aff'))
-  )
+  author_aff_xpaths = [
+    'front/article-meta/contrib-group/aff',
+    'front/article-meta/contrib-group/contrib/aff',
+    'front/article-meta/aff'
+  ]
+  author_aff = flatten([
+    get_text_content_list(xml_root.xpath(xpath)) for xpath in author_aff_xpaths
+  ])
+  aff_extra = [
+    s.strip()
+    for xpath in author_aff_xpaths
+    for s in get_text_content_list(
+      xml_root.xpath('{}/*'.format(xpath))
+    )
+  ]
+  get_logger().debug('aff_extra: %s', aff_extra)
+  if aff_extra:
+    author_aff.append(aff_extra)
   target_annotations = []
   for k in field_names:
     for e in xml_root.xpath(mapping[k]):
