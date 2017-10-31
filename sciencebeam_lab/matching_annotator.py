@@ -124,8 +124,8 @@ class FuzzyMatchResult(object):
     return self._b_index_range
 
   def __str__(self):
-    return 'FuzzyMatchResult(matching_blocks={}, b_ratio={})'.format(
-      self.matching_blocks, self.b_ratio()
+    return 'FuzzyMatchResult(matching_blocks={}, b_gap_ratio={})'.format(
+      self.matching_blocks, self.b_gap_ratio()
     )
 
 def fuzzy_match(a, b, exact_word_match_threshold=5):
