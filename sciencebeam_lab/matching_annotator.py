@@ -7,6 +7,9 @@ from future.utils import python_2_unicode_compatible
 from sciencebeam_lab.utils.SequenceMatcher import (
   SequenceMatcher
 )
+from sciencebeam_lab.utils.WordSequenceMatcher import (
+  WordSequenceMatcher
+)
 
 from sciencebeam_lab.xml_utils import (
   get_text_content,
@@ -121,8 +124,11 @@ class FuzzyMatchResult(object):
       self.matching_blocks, self.b_ratio()
     )
 
-def fuzzy_match(a, b):
-  sm = SequenceMatcher(None, a, b)
+def fuzzy_match(a, b, exact_word_match_threshold=5):
+  if min(len(a), len(b)) < exact_word_match_threshold:
+    sm = WordSequenceMatcher(None, a, b)
+  else:
+    sm = SequenceMatcher(None, a, b)
   matching_blocks = sm.get_matching_blocks()
   return FuzzyMatchResult(a, b, matching_blocks)
 

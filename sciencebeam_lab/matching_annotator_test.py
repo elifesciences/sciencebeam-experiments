@@ -107,6 +107,27 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
+  def test_should_prefer_word_boundaries(self):
+    pre_tokens = [
+      SimpleToken('this')
+    ]
+    matching_tokens = [
+      SimpleToken('is')
+    ]
+    post_tokens = [
+      SimpleToken('miss')
+    ]
+    target_annotations = [
+      TargetAnnotation('is', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(
+      pre_tokens + matching_tokens + post_tokens
+    )])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(pre_tokens) == [None] * len(pre_tokens)
+    assert _get_tags_of_tokens(post_tokens) == [None] * len(post_tokens)
+
   def test_should_annotate_multiple_value_target_annotation(self):
     matching_tokens = [
       SimpleToken('this'),
