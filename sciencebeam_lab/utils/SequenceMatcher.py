@@ -10,3 +10,5 @@ except ImportError:
       ' Install python-Levenshtein (and fuzzywuzzy) to remove this warning'
     )
   from difflib import SequenceMatcher
+
+assert SequenceMatcher is not None
