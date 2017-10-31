@@ -74,6 +74,14 @@ class SequenceMatch(object):
       self.index2_range[1]
     )
 
+@python_2_unicode_compatible
+class LazyStr(object):
+  def __init__(self, fn):
+    self.fn = fn
+
+  def __str__(self):
+    return self.fn()
+
 class FuzzyMatchResult(object):
   def __init__(self, a, b, matching_blocks):
     self.a = a
@@ -123,6 +131,17 @@ class FuzzyMatchResult(object):
       )
     return self._b_index_range
 
+  def detailed_str(self):
+    return 'matching_blocks=[%s]' % (
+      ', '.join([
+        '(a[%d:+%d] = b[%d:+%d] = "%s")' % (ai, size, bi, size, self.a[ai:ai + size])
+        for ai, bi, size in self.non_empty_matching_blocks
+      ])
+    )
+
+  def detailed(self):
+    return LazyStr(self.detailed_str)
+
   def __str__(self):
     return 'FuzzyMatchResult(matching_blocks={}, b_gap_ratio={})'.format(
       self.matching_blocks, self.b_gap_ratio()
@@ -152,6 +171,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
     if len(s1) - start_index >= len(choice_str):
       m = fuzzy_match(s1, choice_str)
       get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
+      get_logger().debug('detailed match: %s', m.detailed())
       if m.b_gap_ratio() >= threshold:
         index1_range = m.a_index_range()
         index2_range = m.b_index_range()
@@ -174,6 +194,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
       s1_sub = s1[start_index:]
       m = fuzzy_match(choice_str, s1_sub)
       get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
+      get_logger().debug('detailed match: %s', m.detailed())
       if m.b_gap_ratio() >= threshold:
         index2_rel_range = m.a_index_range()
         get_logger().debug('index2_rel_range: %s, start_index: %d', index2_rel_range, start_index)
