@@ -9,7 +9,10 @@ from sciencebeam_lab.structured_document import (
 from sciencebeam_lab.matching_annotator import (
   MatchingAnnotator,
   TargetAnnotation,
-  xml_root_to_target_annotations
+  xml_root_to_target_annotations,
+  THIN_SPACE,
+  EN_DASH,
+  EM_DASH
 )
 
 from sciencebeam_lab.collection_utils import (
@@ -102,6 +105,19 @@ class TestMatchingAnnotator(object):
     ]
     target_annotations = [
       TargetAnnotation('this is matching', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
+  def test_should_match_normalised_characters(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is' + THIN_SPACE + EN_DASH + EM_DASH),
+      SimpleToken('matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('this is -- matching', TAG1)
     ]
     doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
     MatchingAnnotator(target_annotations).annotate(doc)

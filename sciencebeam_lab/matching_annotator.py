@@ -24,8 +24,21 @@ from sciencebeam_lab.annotator import (
   AbstractAnnotator
 )
 
+THIN_SPACE = u'\u2009'
+EN_DASH = u'\u2013'
+EM_DASH = u'\u2014'
+
 def get_logger():
   return logging.getLogger(__name__)
+
+def normalise_str(s):
+  return s.replace(EM_DASH, u'-').replace(EN_DASH, u'-').replace(THIN_SPACE, ' ')
+
+def normalise_str_or_list(x):
+  if isinstance(x, list):
+    return [normalise_str(s) for s in x]
+  else:
+    return normalise_str(x)
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -37,10 +50,12 @@ class TargetAnnotation(object):
     return u'{}: {}'.format(self.name, self.value)
 
 class SequenceWrapper(object):
-  def __init__(self, structured_document, tokens):
+  def __init__(self, structured_document, tokens, str_filter_f=None):
     self.tokens = tokens
     self.token_str_list = [structured_document.get_text(t) or '' for t in tokens]
     self.tokens_as_str = ' '.join(self.token_str_list)
+    if str_filter_f:
+      self.tokens_as_str = str_filter_f(self.tokens_as_str)
 
   def tokens_between(self, index_range):
     start, end = index_range
@@ -304,12 +319,14 @@ class MatchingAnnotator(AbstractAnnotator):
           )
           pending_sequences.append(SequenceWrapper(
             structured_document,
-            tokens
+            tokens,
+            normalise_str
           ))
 
     for target_annotation in self.target_annotations:
       get_logger().debug('target annotation: %s', target_annotation.name)
-      for m in find_best_matches(target_annotation.value, pending_sequences):
+      target_value = normalise_str_or_list(target_annotation.value)
+      for m in find_best_matches(target_value, pending_sequences):
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))
         get_logger().debug(
