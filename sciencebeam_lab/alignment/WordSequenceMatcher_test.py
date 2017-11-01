@@ -1,4 +1,4 @@
-from sciencebeam_lab.utils.WordSequenceMatcher import (
+from sciencebeam_lab.alignment.WordSequenceMatcher import (
   WordSequenceMatcher
 )
 

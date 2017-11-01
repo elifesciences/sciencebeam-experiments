@@ -4,10 +4,10 @@ from builtins import str as text
 
 from future.utils import python_2_unicode_compatible
 
-from sciencebeam_lab.utils.SequenceMatcher import (
+from sciencebeam_lab.alignment.SequenceMatcher import (
   SequenceMatcher
 )
-from sciencebeam_lab.utils.WordSequenceMatcher import (
+from sciencebeam_lab.alignment.WordSequenceMatcher import (
   WordSequenceMatcher
 )
 
