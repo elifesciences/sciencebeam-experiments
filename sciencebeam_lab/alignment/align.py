@@ -166,7 +166,7 @@ def alignment_matrix_traceback_py(score_matrix, start_locs, limit):
         for next_loc in next_locs
       ])
 
-def _traceback(score_matrix, start_locs, limit):
+def alignment_matrix_traceback(score_matrix, start_locs, limit):
   if native_enabled and limit == 1:
     yield native_alignment_matrix_single_path_traceback(
       score_matrix, start_locs[0]
@@ -258,7 +258,7 @@ class AbstractSequenceMatcher(object, with_metaclass(ABCMeta)):
     max_score = score_matrix.max()
 
     max_score_loc = np.argwhere(score_matrix == max_score)
-    paths = _traceback(score_matrix, max_score_loc, limit=limit or 0)
+    paths = alignment_matrix_traceback(score_matrix, max_score_loc, limit=limit or 0)
     return (
       list(_path_to_matching_blocks(path, self.a, self.b))
       for path in paths
