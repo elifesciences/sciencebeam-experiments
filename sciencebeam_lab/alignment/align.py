@@ -236,9 +236,6 @@ def _as_np_array(s):
 wrap_sequence = _as_np_array
 
 class AbstractSequenceMatcher(object, with_metaclass(ABCMeta)):
-  """
-  Local sequence matcher using Smith-Waterman algorithm
-  """
   def __init__(self, a, b, scoring):
     self.a = a
     self.b = b
