@@ -9,7 +9,8 @@ import numpy as np
 from sciencebeam_lab.alignment.align import (
   SimpleScoring,
   CustomScoring,
-  LocalSequenceMatcher
+  LocalSequenceMatcher,
+  require_native
 )
 
 DEFAULT_MATCH_SCORE = 2
@@ -37,48 +38,25 @@ def encode_str(s):
 LONG_ENCODED1 = encode_str(LONG_STRING1)
 LONG_ENCODED2 = encode_str(LONG_STRING2)
 
-@contextmanager
-def disabled_cython_code():
-  import sciencebeam_lab.alignment.align as align
-  copy_compute_inner_alignment_matrix_simple_scoring_int = (
-    align.compute_inner_alignment_matrix_simple_scoring_int
-  )
-  copy_compute_inner_alignment_matrix_simple_scoring_any = (
-    align.compute_inner_alignment_matrix_simple_scoring_any
-  )
-  copy_compute_inner_alignment_matrix_scoring_fn_any = (
-    align.compute_inner_alignment_matrix_scoring_fn_any
-  )
-  align.compute_inner_alignment_matrix_simple_scoring_int = None
-  align.compute_inner_alignment_matrix_simple_scoring_any = None
-  align.compute_inner_alignment_matrix_scoring_fn_any = None
-  yield
-  align.compute_inner_alignment_matrix_simple_scoring_int = (
-    copy_compute_inner_alignment_matrix_simple_scoring_int
-  )
-  align.compute_inner_alignment_matrix_simple_scoring_any = (
-    copy_compute_inner_alignment_matrix_simple_scoring_any
-  )
-  align.compute_inner_alignment_matrix_scoring_fn_any = (
-    copy_compute_inner_alignment_matrix_scoring_fn_any
-  )
-  
-
 def test_align_with_scoring_fn_py():
-  with disabled_cython_code():
+  with require_native(False):
     LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, CUSTOM_SCORING).get_matching_blocks()
 
 def test_align_with_scoring_fn():
-  LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, CUSTOM_SCORING).get_matching_blocks()
+  with require_native(True):
+    LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, CUSTOM_SCORING).get_matching_blocks()
 
 def test_align_with_simple_scoring():
-  LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, DEFAULT_SCORING).get_matching_blocks()
+  with require_native(True):
+    LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, DEFAULT_SCORING).get_matching_blocks()
 
 def test_align_with_simple_scoring_int():
-  LocalSequenceMatcher(LONG_ENCODED1, LONG_ENCODED2, DEFAULT_SCORING).get_matching_blocks()
+  with require_native(True):
+    LocalSequenceMatcher(LONG_ENCODED1, LONG_ENCODED2, DEFAULT_SCORING).get_matching_blocks()
 
 def test_align_with_simple_scoring_str():
-  LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, DEFAULT_SCORING).get_matching_blocks()
+  with require_native(True):
+    LocalSequenceMatcher(LONG_STRING1, LONG_STRING2, DEFAULT_SCORING).get_matching_blocks()
 
 def report_timing(fn, number=1):
   timeit_result_ms = timeit.timeit(

@@ -30,7 +30,7 @@ cdef inline int imax4(int a, int b, int c, int d):
   else:
     return imax3(b, c, d)
 
-def compute_inner_alignment_matrix_simple_scoring_int(
+def native_compute_inner_alignment_matrix_simple_scoring_int(
   score_matrix_t scoring_matrix,
   int[:] a,
   int[:] b,
@@ -53,7 +53,7 @@ def compute_inner_alignment_matrix_simple_scoring_int(
         scoring_matrix[i - 1, j] + gap_score
       )
 
-def compute_inner_alignment_matrix_simple_scoring_any(
+def native_compute_inner_alignment_matrix_simple_scoring_any(
   score_matrix_t scoring_matrix,
   a,
   b,
@@ -78,7 +78,7 @@ def compute_inner_alignment_matrix_simple_scoring_any(
         scoring_matrix[i - 1, j] + gap_score
       )
 
-def compute_inner_alignment_matrix_scoring_fn_any(
+def native_compute_inner_alignment_matrix_scoring_fn_any(
   score_matrix_t scoring_matrix,
   a,
   b,

@@ -2,6 +2,7 @@ import logging
 from collections import deque
 from itertools import islice
 from abc import ABCMeta, abstractmethod
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -13,22 +14,26 @@ from six import (
 
 try:
   from sciencebeam_lab.alignment.align_fast_utils import ( # pylint: disable=E0611
-    compute_inner_alignment_matrix_simple_scoring_int,
-    compute_inner_alignment_matrix_simple_scoring_any,
-    compute_inner_alignment_matrix_scoring_fn_any,
+    native_compute_inner_alignment_matrix_simple_scoring_int,
+    native_compute_inner_alignment_matrix_simple_scoring_any,
+    native_compute_inner_alignment_matrix_scoring_fn_any,
     native_alignment_matrix_single_path_traceback
   )
   native_enabled = True
 except ImportError:
   logging.getLogger(__name__).warning('fast implementation not available')
-  compute_inner_alignment_matrix_simple_scoring_int = None
-  compute_inner_alignment_matrix_simple_scoring_any = None
-  compute_inner_alignment_matrix_scoring_fn_any = None
-  alignment_matrix_traceback = None
   native_enabled = False
 
 def get_logger():
   return logging.getLogger(__name__)
+
+@contextmanager
+def require_native(required=True):
+  global native_enabled # pylint: disable=W0603
+  was_enabled = native_enabled
+  native_enabled = required
+  yield
+  native_enabled = was_enabled
 
 def _is_array_of_type(a, dtype):
   return np.issubdtype(a.dtype, dtype)
@@ -79,16 +84,16 @@ def compute_inner_alignment_matrix_simple_scoring(
   scoring_matrix, a, b, match_score, mismatch_score, gap_score):
   try:
     if (
-      compute_inner_alignment_matrix_simple_scoring_int and
+      native_enabled and
       _is_array_of_type(a, np.int32) and _is_array_of_type(b, np.int32)
     ):
-      compute_inner_alignment_matrix_simple_scoring_int(
+      native_compute_inner_alignment_matrix_simple_scoring_int(
         scoring_matrix, a, b,
         match_score, mismatch_score, gap_score
       )
       return
-    elif compute_inner_alignment_matrix_simple_scoring_any:
-      compute_inner_alignment_matrix_simple_scoring_any(
+    elif native_enabled:
+      native_compute_inner_alignment_matrix_simple_scoring_any(
         scoring_matrix, a, b,
         match_score, mismatch_score, gap_score
       )
@@ -103,8 +108,8 @@ def compute_inner_alignment_matrix_simple_scoring(
 def compute_inner_alignment_matrix_custom_scoring(
   scoring_matrix, a, b, scoring_fn, gap_score):
 
-  if compute_inner_alignment_matrix_scoring_fn_any:
-    compute_inner_alignment_matrix_scoring_fn_any(
+  if native_enabled:
+    native_compute_inner_alignment_matrix_scoring_fn_any(
       scoring_matrix, a, b,
       scoring_fn, gap_score
     )
