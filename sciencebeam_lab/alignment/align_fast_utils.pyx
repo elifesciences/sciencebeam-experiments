@@ -37,6 +37,7 @@ def native_compute_inner_alignment_matrix_simple_scoring_int(
   int match_score, int mismatch_score, int gap_score):
   cdef int m = len(a) + 1
   cdef int n = len(b) + 1
+  cdef int i, j
   for i in range(1, m):
     for j in range(1, n):
       scoring_matrix[i, j] = imax4(
@@ -62,6 +63,7 @@ def native_compute_inner_alignment_matrix_simple_scoring_any(
   cdef list cb = list(b)
   cdef int m = len(ca) + 1
   cdef int n = len(cb) + 1
+  cdef int i, j
   for i in range(1, m):
     for j in range(1, n):
       scoring_matrix[i, j] = imax4(
@@ -87,6 +89,7 @@ def native_compute_inner_alignment_matrix_scoring_fn_any(
   cdef list cb = list(b)
   cdef int m = len(ca) + 1
   cdef int n = len(cb) + 1
+  cdef int i, j
   for i in range(1, m):
     for j in range(1, n):
       scoring_matrix[i, j] = imax4(
