@@ -2,7 +2,6 @@ from __future__ import absolute_import, print_function
 
 import logging
 import timeit
-from contextlib import contextmanager
 
 import numpy as np
 
