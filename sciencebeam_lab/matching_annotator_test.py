@@ -172,6 +172,22 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
+  def test_should_annotate_with_local_matching_smaller_gaps(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('this is. matching indeed matching', TAG1)
+    ]
+    # this should align with 'this is_ matching' with one gap'
+    # instead of globally 'this is_ ________ ______ matching'
+    # (which would result in a worse b_gap_ratio)
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
   def test_should_not_annotate_fuzzily_matching_with_many_differences(self):
     matching_tokens = [
       SimpleToken('this'),

@@ -4,8 +4,9 @@ from builtins import str as text
 
 from future.utils import python_2_unicode_compatible
 
-from sciencebeam_lab.alignment.SequenceMatcher import (
-  SequenceMatcher
+from sciencebeam_lab.alignment.align import (
+  LocalSequenceMatcher,
+  SimpleScoring
 )
 from sciencebeam_lab.alignment.WordSequenceMatcher import (
   WordSequenceMatcher
@@ -27,6 +28,12 @@ from sciencebeam_lab.annotator import (
 THIN_SPACE = u'\u2009'
 EN_DASH = u'\u2013'
 EM_DASH = u'\u2014'
+
+DEFAULT_SCORING = SimpleScoring(
+  match_score=2,
+  mismatch_score=-1,
+  gap_score=-2
+)
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -166,7 +173,7 @@ def fuzzy_match(a, b, exact_word_match_threshold=5):
   if min(len(a), len(b)) < exact_word_match_threshold:
     sm = WordSequenceMatcher(None, a, b)
   else:
-    sm = SequenceMatcher(None, a, b)
+    sm = LocalSequenceMatcher(a=a, b=b, scoring=DEFAULT_SCORING)
   matching_blocks = sm.get_matching_blocks()
   return FuzzyMatchResult(a, b, matching_blocks)
 
