@@ -24,6 +24,8 @@ except ImportError:
   logging.getLogger(__name__).warning('fast implementation not available')
   native_enabled = False
 
+MIN_INT = -2147483647
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -40,13 +42,13 @@ def _is_array_of_type(a, dtype):
 
 # fallback implementation
 def compute_inner_alignment_matrix_simple_scoring_py(
-  scoring_matrix, a, b, match_score, mismatch_score, gap_score):
+  scoring_matrix, a, b, match_score, mismatch_score, gap_score, min_score):
   m = len(a) + 1
   n = len(b) + 1
   for i in range(1, m):
     for j in range(1, n):
       scoring_matrix[i, j] = max(
-        0,
+        min_score,
 
         # Match elements.
         scoring_matrix[i - 1, j - 1] +
@@ -61,13 +63,13 @@ def compute_inner_alignment_matrix_simple_scoring_py(
 
 # fallback implementation
 def compute_inner_alignment_matrix_scoring_fn_py(
-  scoring_matrix, a, b, scoring_fn, gap_score):
+  scoring_matrix, a, b, scoring_fn, gap_score, min_score):
   m = len(a) + 1
   n = len(b) + 1
   for i in range(1, m):
     for j in range(1, n):
       scoring_matrix[i, j] = max(
-        0,
+        min_score,
 
         # Match elements.
         scoring_matrix[i - 1, j - 1] +
@@ -81,7 +83,7 @@ def compute_inner_alignment_matrix_scoring_fn_py(
       )
 
 def compute_inner_alignment_matrix_simple_scoring(
-  scoring_matrix, a, b, match_score, mismatch_score, gap_score):
+  scoring_matrix, a, b, match_score, mismatch_score, gap_score, min_score):
   try:
     if (
       native_enabled and
@@ -89,57 +91,61 @@ def compute_inner_alignment_matrix_simple_scoring(
     ):
       native_compute_inner_alignment_matrix_simple_scoring_int(
         scoring_matrix, a, b,
-        match_score, mismatch_score, gap_score
+        match_score, mismatch_score, gap_score, min_score
       )
       return
     elif native_enabled:
       native_compute_inner_alignment_matrix_simple_scoring_any(
         scoring_matrix, a, b,
-        match_score, mismatch_score, gap_score
+        match_score, mismatch_score, gap_score, min_score
       )
       return
   except AttributeError:
     pass
   compute_inner_alignment_matrix_simple_scoring_py(
     scoring_matrix, a, b,
-    match_score, mismatch_score, gap_score
+    match_score, mismatch_score, gap_score, min_score
   )
 
 def compute_inner_alignment_matrix_custom_scoring(
-  scoring_matrix, a, b, scoring_fn, gap_score):
+  scoring_matrix, a, b, scoring_fn, gap_score, min_score):
 
   if native_enabled:
     native_compute_inner_alignment_matrix_scoring_fn_any(
       scoring_matrix, a, b,
-      scoring_fn, gap_score
+      scoring_fn, gap_score, min_score
     )
   else:
     compute_inner_alignment_matrix_scoring_fn_py(
       scoring_matrix, a, b,
-      scoring_fn, gap_score
+      scoring_fn, gap_score, min_score
     )
 
 def compute_inner_alignment_matrix(
-  scoring_matrix, a, b, scoring):
+  scoring_matrix, a, b, scoring, min_score):
   if isinstance(scoring, CustomScoring):
     compute_inner_alignment_matrix_custom_scoring(
       scoring_matrix, a, b,
-      scoring.scoring_fn, scoring.gap_score
+      scoring.scoring_fn, scoring.gap_score, min_score
     )
   else:
     compute_inner_alignment_matrix_simple_scoring(
       scoring_matrix, a, b,
-      scoring.match_score, scoring.mismatch_score, scoring.gap_score
+      scoring.match_score, scoring.mismatch_score, scoring.gap_score,
+      min_score
     )
 
-def _next_locs(score_matrix, i, j):
-  diag_score = score_matrix[i - 1][j - 1]
-  up_score = score_matrix[i - 1][j]
-  left_score = score_matrix[i][j - 1]
+def _next_locs(score_matrix, i, j, is_local):
+  diag_score = score_matrix[i - 1][j - 1] if (i != 0 and j != 0) else MIN_INT
+  up_score = score_matrix[i - 1][j] if i != 0 else MIN_INT
+  left_score = score_matrix[i][j - 1] if j != 0 else MIN_INT
   max_score = max(diag_score, up_score, left_score)
-  if max_score == 0 or diag_score == 0:
+  if max_score == MIN_INT:
+    return []
+  if (max_score == 0 or diag_score == 0) and (is_local or (i == 1 and j == 1)):
     return []
   if diag_score == max_score:
+    get_logger().debug('diag_score: %s (%s)', diag_score, max_score)
     return [(i - 1, j - 1)]
   locs = []
   if up_score == max_score:
@@ -148,7 +154,7 @@ def _next_locs(score_matrix, i, j):
     locs.append((i, j - 1))
   return locs
 
-def alignment_matrix_traceback_py(score_matrix, start_locs, limit):
+def alignment_matrix_traceback_py(score_matrix, start_locs, is_local):
   # Using LinkedListNode to cheaply branch off to multiple paths
   pending_roots = deque([
     LinkedListNode(tuple(loc))
@@ -157,7 +163,8 @@ def alignment_matrix_traceback_py(score_matrix, start_locs, limit):
   while len(pending_roots) > 0:
     n = pending_roots.pop()
     i, j = n.data
-    next_locs = _next_locs(score_matrix, i, j)
+    next_locs = _next_locs(score_matrix, i, j, is_local)
+    get_logger().debug('next_locs: %s', next_locs)
     if len(next_locs) == 0:
       yield n
     else:
@@ -166,14 +173,14 @@ def alignment_matrix_traceback_py(score_matrix, start_locs, limit):
         for next_loc in next_locs
       ])
 
-def alignment_matrix_traceback(score_matrix, start_locs, limit):
+def alignment_matrix_traceback(score_matrix, start_locs, is_local, limit):
   if native_enabled and limit == 1:
     yield native_alignment_matrix_single_path_traceback(
-      score_matrix, start_locs[0]
+      score_matrix, start_locs[0], 1 if is_local else 0
     )
   else:
     paths = alignment_matrix_traceback_py(
-      score_matrix, start_locs, limit
+      score_matrix, start_locs, is_local
     )
     if limit:
       paths = islice(paths, limit)
@@ -253,16 +260,9 @@ class AbstractSequenceMatcher(object, with_metaclass(ABCMeta)):
       self._alignment_matrix = self._computer_alignment_matrix()
     return self._alignment_matrix
 
+  @abstractmethod
   def get_multiple_matching_blocks(self, limit=None):
-    score_matrix = self._get_alignment_matrix()
-    max_score = score_matrix.max()
-
-    max_score_loc = np.argwhere(score_matrix == max_score)
-    paths = alignment_matrix_traceback(score_matrix, max_score_loc, limit=limit or 0)
-    return (
-      list(_path_to_matching_blocks(path, self.a, self.b))
-      for path in paths
-    )
+    pass
 
   def get_matching_blocks(self):
     for matching_blocks in self.get_multiple_matching_blocks(limit=1):
@@ -280,9 +280,58 @@ class LocalSequenceMatcher(AbstractSequenceMatcher):
     scoring_matrix = np.empty((m, n), dtype=int)
     scoring_matrix[:, 0] = 0
     scoring_matrix[0, :] = 0
+    min_score = 0
     compute_inner_alignment_matrix(
       scoring_matrix,
       self._a, self._b,
-      self.scoring
+      self.scoring,
+      min_score
     )
     return scoring_matrix
+
+  def get_multiple_matching_blocks(self, limit=None):
+    score_matrix = self._get_alignment_matrix()
+    max_score = score_matrix.max()
+
+    max_score_loc = np.argwhere(score_matrix == max_score)
+    is_local = True
+    paths = alignment_matrix_traceback(score_matrix, max_score_loc, is_local, limit=limit or 0)
+    return (
+      list(_path_to_matching_blocks(path, self.a, self.b))
+      for path in paths
+    )
+
+class GlobalSequenceMatcher(AbstractSequenceMatcher):
+  """
+  Global sequence matcher using Needleman-Wunsch algorithm
+  """
+
+  def _computer_alignment_matrix(self):
+    m = len(self._a) + 1
+    n = len(self._b) + 1
+    scoring_matrix = np.empty((m, n), dtype=int)
+    for i in range(m):
+      scoring_matrix[i, 0] = self.scoring.gap_score * i
+    for j in range(n):
+      scoring_matrix[0, j] = self.scoring.gap_score * j
+    min_score = MIN_INT
+    compute_inner_alignment_matrix(
+      scoring_matrix,
+      self._a, self._b,
+      self.scoring,
+      min_score
+    )
+    return scoring_matrix
+
+  def get_multiple_matching_blocks(self, limit=None):
+    score_matrix = self._get_alignment_matrix()
+
+    m = len(self._a) + 1
+    n = len(self._b) + 1
+    start_locs = [(m - 1, n - 1)]
+    is_local = False
+    paths = alignment_matrix_traceback(score_matrix, start_locs, is_local, limit=limit or 0)
+    return (
+      list(_path_to_matching_blocks(path, self.a, self.b))
+      for path in paths
+    )

@@ -10,13 +10,14 @@ import numpy as np
 
 from sciencebeam_lab.alignment.align import (
   LocalSequenceMatcher,
+  GlobalSequenceMatcher,
   SimpleScoring,
   CustomScoring,
   require_native
 )
 
 DEFAULT_SCORING = SimpleScoring(
-  match_score=2,
+  match_score=3,
   mismatch_score=-1,
   gap_score=-2
 )
@@ -38,19 +39,10 @@ class CharWrapper(object):
   def __eq__(self, b):
     return self.c == b.c
 
-class AbstractTestLocalSequenceMatcher(object, with_metaclass(ABCMeta)):
+class AbstractTestCommonSequenceMatcher(object, with_metaclass(ABCMeta)):
   @abstractmethod
   def _convert(self, x):
     pass
-
-  def _matcher(self, a, b, scoring=None):
-    if scoring is None:
-      scoring = DEFAULT_SCORING
-    return LocalSequenceMatcher(
-      a=self._convert(a),
-      b=self._convert(b),
-      scoring=scoring
-    )
 
   def test_should_not_return_non_zero_blocks_for_no(self):
     sm = self._matcher(a='a', b='b')
@@ -75,6 +67,18 @@ class AbstractTestLocalSequenceMatcher(object, with_metaclass(ABCMeta)):
   def test_should_align_using_custom_scoring_fn(self):
     sm = self._matcher(a='a', b='a', scoring=DEFAULT_CUSTOM_SCORING)
     assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
+
+  def _test_should_not_match_block_after_big_gap(self):
+    sm = self._matcher(a='abcxyz', b='abc123456xyz')
+    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
+
+class AbstractTestLocalSequenceMatcher(AbstractTestCommonSequenceMatcher):
+  def _matcher(self, a, b, scoring=None):
+    return LocalSequenceMatcher(
+      a=self._convert(a),
+      b=self._convert(b),
+      scoring=scoring or DEFAULT_SCORING
+    )
 
 class TestLocalSequenceMatcherWithUnicode(AbstractTestLocalSequenceMatcher):
   def _convert(self, x):
@@ -108,3 +112,20 @@ class TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative(
       return super(TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative, self)._matcher(
         a=a, b=b, scoring=scoring
       )
+
+class AbstractTestGlobalSequenceMatcher(AbstractTestCommonSequenceMatcher):
+  def _matcher(self, a, b, scoring=None):
+    with require_native(False):
+      return GlobalSequenceMatcher(
+        a=self._convert(a),
+        b=self._convert(b),
+        scoring=scoring or DEFAULT_SCORING
+      )
+
+  def test_should_prefer_match_block_after_big_gap(self):
+    sm = self._matcher(a='abcxyz', b='abc123456xyz')
+    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3), (3, 9, 3)]
+
+class TestGlobalSequenceMatcherWithUnicode(AbstractTestGlobalSequenceMatcher):
+  def _convert(self, x):
+    return as_u(x)
