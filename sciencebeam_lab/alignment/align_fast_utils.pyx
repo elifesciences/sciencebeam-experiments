@@ -126,8 +126,10 @@ def native_alignment_matrix_single_path_traceback(
   score_matrix_t score_matrix,
   start_loc):
 
-  cur_loc = start_loc
-  path = [cur_loc]
+  cdef int[2] cur_loc = (int(start_loc[0]), int(start_loc[1]))
+  cdef list path = [cur_loc]
+  cdef int i, j
+  cdef tuple next_loc
   while True:
     i, j = cur_loc
     next_loc = _next_loc(score_matrix, i, j)
