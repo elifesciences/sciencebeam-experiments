@@ -10,6 +10,16 @@
 pip install -r requirements.txt
 ```
 
+# Cython
+
+Run:
+
+```bash
+python setup.py build_ext --inplace
+```
+
+For more information see [Cython Build Documentation](http://docs.cython.org/en/latest/src/quickstart/build.html).
+
 ## lxml to svg
 
 Convert _Layout XML_ produced by Grobid's fork of [pdf2xml or pdftoxml](https://github.com/kermitt2/pdf2xml) to SVG.
