@@ -11,7 +11,8 @@ import numpy as np
 from sciencebeam_lab.alignment.align import (
   LocalSequenceMatcher,
   SimpleScoring,
-  CustomScoring
+  CustomScoring,
+  require_native
 )
 
 DEFAULT_SCORING = SimpleScoring(
@@ -98,3 +99,12 @@ class TestLocalSequenceMatcherWithNumpyInt64Array(AbstractTestLocalSequenceMatch
 class TestLocalSequenceMatcherWithCustomObjectList(AbstractTestLocalSequenceMatcher):
   def _convert(self, x):
     return [CharWrapper(c) for c in x]
+
+class TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative(
+  TestLocalSequenceMatcherWithNumpyInt32Array):
+
+  def _matcher(self, a, b, scoring=None):
+    with require_native(False):
+      return super(TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative, self)._matcher(
+        a=a, b=b, scoring=scoring
+      )
