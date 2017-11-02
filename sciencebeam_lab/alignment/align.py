@@ -15,13 +15,17 @@ try:
   from sciencebeam_lab.alignment.align_fast_utils import ( # pylint: disable=E0611
     compute_inner_alignment_matrix_simple_scoring_int,
     compute_inner_alignment_matrix_simple_scoring_any,
-    compute_inner_alignment_matrix_scoring_fn_any
+    compute_inner_alignment_matrix_scoring_fn_any,
+    native_alignment_matrix_single_path_traceback
   )
+  native_enabled = True
 except ImportError:
   logging.getLogger(__name__).warning('fast implementation not available')
   compute_inner_alignment_matrix_simple_scoring_int = None
   compute_inner_alignment_matrix_simple_scoring_any = None
   compute_inner_alignment_matrix_scoring_fn_any = None
+  alignment_matrix_traceback = None
+  native_enabled = False
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -123,6 +127,54 @@ def compute_inner_alignment_matrix(
       scoring.match_score, scoring.mismatch_score, scoring.gap_score
     )
 
+def _next_locs(score_matrix, i, j):
+  diag_score = score_matrix[i - 1][j - 1]
+  up_score = score_matrix[i - 1][j]
+  left_score = score_matrix[i][j - 1]
+  max_score = max(diag_score, up_score, left_score)
+  if max_score == 0 or diag_score == 0:
+    return []
+  if diag_score == max_score:
+    return [(i - 1, j - 1)]
+  locs = []
+  if up_score == max_score:
+    locs.append((i - 1, j))
+  if left_score == max_score:
+    locs.append((i, j - 1))
+  return locs
+
+def alignment_matrix_traceback_py(score_matrix, start_locs, limit):
+  # Using LinkedListNode to cheaply branch off to multiple paths
+  pending_roots = deque([
+    LinkedListNode(tuple(loc))
+    for loc in start_locs
+  ])
+  while len(pending_roots) > 0:
+    n = pending_roots.pop()
+    i, j = n.data
+    next_locs = _next_locs(score_matrix, i, j)
+    if len(next_locs) == 0:
+      yield n
+    else:
+      pending_roots.extend([
+        LinkedListNode(next_loc, n)
+        for next_loc in next_locs
+      ])
+
+def _traceback(score_matrix, start_locs, limit):
+  if native_enabled and limit == 1:
+    yield native_alignment_matrix_single_path_traceback(
+      score_matrix, start_locs[0]
+    )
+  else:
+    paths = alignment_matrix_traceback_py(
+      score_matrix, start_locs, limit
+    )
+    if limit:
+      paths = islice(paths, limit)
+    for path in paths:
+      yield path
+
 class SimpleScoring(object):
   def __init__(self, match_score, mismatch_score, gap_score):
     self.match_score = match_score
@@ -199,48 +251,12 @@ class AbstractSequenceMatcher(object, with_metaclass(ABCMeta)):
       self._alignment_matrix = self._computer_alignment_matrix()
     return self._alignment_matrix
 
-  def _traceback(self, score_matrix, start_locs):
-    # Using LinkedListNode to cheaply branch off to multiple paths
-    pending_roots = deque([
-      LinkedListNode(tuple(loc))
-      for loc in start_locs
-    ])
-    while len(pending_roots) > 0:
-      n = pending_roots.pop()
-      i, j = n.data
-      next_locs = self._next_locs(score_matrix, i, j)
-      if len(next_locs) == 0:
-        yield n
-      else:
-        pending_roots.extend([
-          LinkedListNode(next_loc, n)
-          for next_loc in next_locs
-        ])
-
-  def _next_locs(self, score_matrix, i, j):
-    diag_score = score_matrix[i - 1][j - 1]
-    up_score = score_matrix[i - 1][j]
-    left_score = score_matrix[i][j - 1]
-    max_score = max(diag_score, up_score, left_score)
-    if max_score == 0 or diag_score == 0:
-      return []
-    if diag_score == max_score:
-      return [(i - 1, j - 1)]
-    locs = []
-    if up_score == max_score:
-      locs.append((i - 1, j))
-    if left_score == max_score:
-      locs.append((i, j - 1))
-    return locs
-
   def get_multiple_matching_blocks(self, limit=None):
     score_matrix = self._get_alignment_matrix()
     max_score = score_matrix.max()
 
     max_score_loc = np.argwhere(score_matrix == max_score)
-    paths = self._traceback(score_matrix, max_score_loc)
-    if limit is not None:
-      paths = islice(paths, limit)
+    paths = _traceback(score_matrix, max_score_loc, limit=limit or 0)
     return (
       list(_path_to_matching_blocks(path, self.a, self.b))
       for path in paths
@@ -259,7 +275,7 @@ class LocalSequenceMatcher(AbstractSequenceMatcher):
   def _computer_alignment_matrix(self):
     m = len(self._a) + 1
     n = len(self._b) + 1
-    scoring_matrix = np.empty((m, n), int)
+    scoring_matrix = np.empty((m, n), dtype=int)
     scoring_matrix[:, 0] = 0
     scoring_matrix[0, :] = 0
     compute_inner_alignment_matrix(

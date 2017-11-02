@@ -1,38 +1,37 @@
-# cython: boundscheck=False
-# cython: wraparound=False
-# cython: nonecheck=False
 from cpython cimport array
 cimport cython
+
+import logging
 
 import numpy as np
 cimport numpy as np
 
+def get_logger():
+  return logging.getLogger(__name__)
+
+ctypedef np.int_t int_t
+ctypedef int_t[:, :] score_matrix_t
+
+cdef inline int imax2(int a, int b):
+  if a >= b:
+    return a
+  else:
+    return b
+
+cdef inline int imax3(int a, int b, int c):
+  if a >= b:
+    return imax2(a, c)
+  else:
+    return imax2(b, c)
+
 cdef inline int imax4(int a, int b, int c, int d):
   if a >= b:
-    if a >= c:
-      if a >= d:
-        return a
-      else:
-        return d
-    else:
-      if c >= d:
-        return c
-      else:
-        return d
+    return imax3(a, c, d)
   else:
-    if b >= c:
-      if b >= d:
-        return b
-      else:
-        return d
-    else:
-      if c >= d:
-        return c
-      else:
-        return d
+    return imax3(b, c, d)
 
 def compute_inner_alignment_matrix_simple_scoring_int(
-  np.int_t[:, :] scoring_matrix,
+  score_matrix_t scoring_matrix,
   int[:] a,
   int[:] b,
   int match_score, int mismatch_score, int gap_score):
@@ -55,7 +54,7 @@ def compute_inner_alignment_matrix_simple_scoring_int(
       )
 
 def compute_inner_alignment_matrix_simple_scoring_any(
-  np.int_t[:, :] scoring_matrix,
+  score_matrix_t scoring_matrix,
   a,
   b,
   int match_score, int mismatch_score, int gap_score):
@@ -80,7 +79,7 @@ def compute_inner_alignment_matrix_simple_scoring_any(
       )
 
 def compute_inner_alignment_matrix_scoring_fn_any(
-  np.int_t[:, :] scoring_matrix,
+  score_matrix_t scoring_matrix,
   a,
   b,
   scoring_fn, int gap_score):
@@ -103,3 +102,34 @@ def compute_inner_alignment_matrix_scoring_fn_any(
         # Gap on sequenceB.
         scoring_matrix[i - 1, j] + gap_score
       )
+
+cdef inline _next_loc(
+  score_matrix_t score_matrix, int i, int j):
+  diag_score = score_matrix[i - 1][j - 1]
+  up_score = score_matrix[i - 1][j]
+  left_score = score_matrix[i][j - 1]
+  max_score = imax3(diag_score, up_score, left_score)
+  if max_score == 0 or diag_score == 0:
+    return None
+  if diag_score == max_score:
+    return (i - 1, j - 1)
+  if up_score == max_score:
+    return (i - 1, j)
+  if left_score == max_score:
+    return (i, j - 1)
+  return None
+
+def native_alignment_matrix_single_path_traceback(
+  score_matrix_t score_matrix,
+  start_loc):
+
+  cur_loc = start_loc
+  path = [cur_loc]
+  while True:
+    i, j = cur_loc
+    next_loc = _next_loc(score_matrix, i, j)
+    if not next_loc:
+      return path
+    else:
+      cur_loc = next_loc
+      path.insert(0, cur_loc)
