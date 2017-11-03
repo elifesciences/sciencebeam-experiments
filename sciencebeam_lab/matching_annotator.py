@@ -342,8 +342,9 @@ class MatchingAnnotator(AbstractAnnotator):
           m.index2_range
         )
         for token in matching_tokens:
-          structured_document.set_tag(
-            token,
-            target_annotation.name
-          )
+          if not structured_document.get_tag(token):
+            structured_document.set_tag(
+              token,
+              target_annotation.name
+            )
     return structured_document
