@@ -1,3 +1,5 @@
+from __future__ import division
+
 import logging
 from configparser import ConfigParser
 from builtins import str as text
@@ -333,6 +335,7 @@ class MatchingAnnotator(AbstractAnnotator):
     for target_annotation in self.target_annotations:
       get_logger().debug('target annotation: %s', target_annotation.name)
       target_value = normalise_str_or_list(target_annotation.value)
+      updated_pending_sequences = pending_sequences.copy()
       for m in find_best_matches(target_value, pending_sequences):
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))
@@ -347,4 +350,16 @@ class MatchingAnnotator(AbstractAnnotator):
               token,
               target_annotation.name
             )
+        num_tagged_tokens = sum(
+          1 if structured_document.get_tag(token) else 0
+          for token in choice.tokens
+        )
+        num_tokens = len(choice.tokens)
+        tagged_ratio = num_tagged_tokens / num_tokens
+        if tagged_ratio > 0.9:
+          try:
+            updated_pending_sequences.remove(choice)
+          except ValueError:
+            pass
+      pending_sequences = updated_pending_sequences
     return structured_document
