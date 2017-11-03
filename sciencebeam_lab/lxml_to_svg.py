@@ -15,6 +15,10 @@ from sciencebeam_lab.matching_annotator import (
   xml_root_to_target_annotations
 )
 
+from sciencebeam_lab.annotation_evaluation import (
+  evaluate_document_by_page
+)
+
 from sciencebeam_lab.svg_structured_document import (
   SVG_TEXT,
   SVG_G,
@@ -160,6 +164,11 @@ def convert(args):
     logger.info('writing to: %s', svg_filename)
     with open(svg_filename, 'wb') as f:
       etree.ElementTree(svg_root).write(f, pretty_print=True)
+  if annotator:
+    tagging_evaluation_results = evaluate_document_by_page(SvgStructuredDocument(svg_roots))
+    logger.info('tagging evaluation:\n%s', '\n'.join([
+      'page{}: {}'.format(1 + i, r) for i, r in enumerate(tagging_evaluation_results)
+    ]))
 
 def main():
   args = parse_args()
