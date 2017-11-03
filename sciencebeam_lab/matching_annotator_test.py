@@ -354,3 +354,38 @@ class TestMatchingAnnotator(object):
     assert _get_tags_of_tokens(pre_tokens) == [None] * len(pre_tokens)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
     assert _get_tags_of_tokens(post_tokens) == [None] * len(post_tokens)
+
+  def test_should_annotate_multiple_shorter_target_annotation_in_longer_line(self):
+    pre_tokens = [
+      SimpleToken('pre')
+    ]
+    matching_tokens_tag_1 = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    mid_tokens = [
+      SimpleToken('mid')
+    ]
+    matching_tokens_tag_2 = [
+      SimpleToken('also'),
+      SimpleToken('good')
+    ]
+    post_tokens = [
+      SimpleToken('post')
+    ]
+    target_annotations = [
+      TargetAnnotation('this is matching', TAG1),
+      TargetAnnotation('also good', TAG2)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(
+        pre_tokens + matching_tokens_tag_1 + mid_tokens + matching_tokens_tag_2 + post_tokens
+      )
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(pre_tokens) == [None] * len(pre_tokens)
+    assert _get_tags_of_tokens(matching_tokens_tag_1) == [TAG1] * len(matching_tokens_tag_1)
+    assert _get_tags_of_tokens(mid_tokens) == [None] * len(mid_tokens)
+    assert _get_tags_of_tokens(matching_tokens_tag_2) == [TAG2] * len(matching_tokens_tag_2)
+    assert _get_tags_of_tokens(post_tokens) == [None] * len(post_tokens)
