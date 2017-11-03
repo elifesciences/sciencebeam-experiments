@@ -68,10 +68,6 @@ class AbstractTestCommonSequenceMatcher(object, with_metaclass(ABCMeta)):
     sm = self._matcher(a='a', b='a', scoring=DEFAULT_CUSTOM_SCORING)
     assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
 
-  def _test_should_not_match_block_after_big_gap(self):
-    sm = self._matcher(a='abcxyz', b='abc123456xyz')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
-
 class AbstractTestLocalSequenceMatcher(AbstractTestCommonSequenceMatcher):
   def _matcher(self, a, b, scoring=None):
     return LocalSequenceMatcher(
@@ -79,6 +75,10 @@ class AbstractTestLocalSequenceMatcher(AbstractTestCommonSequenceMatcher):
       b=self._convert(b),
       scoring=scoring or DEFAULT_SCORING
     )
+
+  def test_should_not_match_block_after_big_gap(self):
+    sm = self._matcher(a='abcxyz', b='abc123456xyz')
+    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
 
 class TestLocalSequenceMatcherWithUnicode(AbstractTestLocalSequenceMatcher):
   def _convert(self, x):
