@@ -287,15 +287,25 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   if aff_extra:
     author_aff.append(aff_extra)
   target_annotations = []
+  target_annotations_with_pos = []
+  xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
     for e in xml_root.xpath(mapping[k]):
+      e_pos = xml_pos_by_node.get(e)
       text_content = (get_text_content(
         e
       ) or '').strip()
       if text_content:
-        target_annotations.append(
-          TargetAnnotation(text_content, k)
+        target_annotations_with_pos.append(
+          (e_pos, TargetAnnotation(text_content, k))
         )
+  target_annotations_with_pos = sorted(
+    target_annotations_with_pos,
+    key=lambda x: x[0]
+  )
+  target_annotations.extend(
+    x[1] for x in target_annotations_with_pos
+  )
   target_annotations = (
     target_annotations +
     [TargetAnnotation(s, 'keywords') for s in keywords] +
