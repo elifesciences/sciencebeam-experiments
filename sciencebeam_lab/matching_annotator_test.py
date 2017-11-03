@@ -174,6 +174,52 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
+  def test_should_annotate_multiple_value_target_annotation_over_multiple_lines(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('may'),
+      SimpleToken('match')
+    ]
+    tokens_by_line = [
+      matching_tokens[0:1],
+      matching_tokens[1:]
+    ]
+    target_annotations = [
+      TargetAnnotation([
+        'this', 'may', 'match'
+      ], TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens) for tokens in tokens_by_line
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
+  def test_should_annotate_not_match_distant_value_of_multiple_value_target_annotation(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('may'),
+      SimpleToken('match')
+    ]
+    distant_matching_tokens = [
+      SimpleToken('not')
+    ]
+    distance_in_lines = 10
+    tokens_by_line = [matching_tokens] + [
+      [SimpleToken('other')] for _ in range(distance_in_lines)
+    ] + [distant_matching_tokens]
+    target_annotations = [
+      TargetAnnotation([
+        'this', 'may', 'match', 'not'
+      ], TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens) for tokens in tokens_by_line
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(distant_matching_tokens) == [None] * len(distant_matching_tokens)
+
   def test_should_annotate_fuzzily_matching(self):
     matching_tokens = [
       SimpleToken('this'),

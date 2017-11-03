@@ -15,7 +15,7 @@ from sciencebeam_lab.alignment.WordSequenceMatcher import (
 )
 
 from sciencebeam_lab.collection_utils import (
-  flatten
+  filter_non_empty
 )
 
 from sciencebeam_lab.xml_utils import (
@@ -36,6 +36,9 @@ DEFAULT_SCORING = SimpleScoring(
   mismatch_score=-1,
   gap_score=-2
 )
+
+DEFAULT_SCORE_THRESHOLD = 0.9
+DEFAULT_MAX_MATCH_GAP = 5
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -79,6 +82,11 @@ class SequenceWrapper(object):
 
   def __str__(self):
     return self.tokens_as_str
+
+class SequenceWrapperWithPosition(SequenceWrapper):
+  def __init__(self, *args, position=None, **kwargs):
+    super(SequenceWrapperWithPosition, self).__init__(*args, **kwargs)
+    self.position = position
 
 @python_2_unicode_compatible
 class SequenceMatch(object):
@@ -179,11 +187,42 @@ def fuzzy_match(a, b, exact_word_match_threshold=5):
   matching_blocks = sm.get_matching_blocks()
   return FuzzyMatchResult(a, b, matching_blocks)
 
-def find_best_matches(sequence, choices, threshold=0.9):
+@python_2_unicode_compatible
+class PositionedSequenceSet(object):
+  def __init__(self):
+    self.data = set()
+
+  def add(self, sequence):
+    self.data.add(sequence.position)
+
+  def is_close_to_any(self, sequence, max_gap):
+    if not max_gap or not self.data:
+      return True
+    position = sequence.position
+    max_distance = max_gap + 1
+    for other_position in self.data:
+      if abs(position - other_position) <= max_distance:
+        return True
+    return False
+
+  def __str__(self):
+    return str(self.data)
+
+def find_best_matches(
+  sequence, choices,
+  threshold=DEFAULT_SCORE_THRESHOLD,
+  max_gap=DEFAULT_MAX_MATCH_GAP,
+  matched_choices=None):
+
+  if matched_choices is None:
+    matched_choices = PositionedSequenceSet()
   if isinstance(sequence, list):
     get_logger().debug('found sequence list: %s', sequence)
     for s in sequence:
-      for m in find_best_matches(s, choices, threshold=threshold):
+      matches = find_best_matches(
+        s, choices, threshold=threshold, max_gap=max_gap, matched_choices=matched_choices
+      )
+      for m in matches:
         yield m
     return
   start_index = 0
@@ -197,6 +236,12 @@ def find_best_matches(sequence, choices, threshold=0.9):
       get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
       if m.b_gap_ratio() >= threshold:
+        if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
+          get_logger().debug(
+            'ignoring match as too distant from previous matches: %s (%s)',
+            matched_choices, choice
+          )
+          continue
         index1_range = m.a_index_range()
         index2_range = m.b_index_range()
         index1_end = index1_range[1]
@@ -206,6 +251,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
           index1_range,
           index2_range
         )
+        matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
         yield m
         if index1_end >= len(s1):
@@ -220,6 +266,12 @@ def find_best_matches(sequence, choices, threshold=0.9):
       get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
       if m.b_gap_ratio() >= threshold:
+        if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
+          get_logger().debug(
+            'ignoring match as too distant from previous matches: %s (%s)',
+            matched_choices, choice
+          )
+          continue
         index2_rel_range = m.a_index_range()
         get_logger().debug('index2_rel_range: %s, start_index: %d', index2_rel_range, start_index)
         index2_start = start_index + index2_rel_range[0]
@@ -230,6 +282,7 @@ def find_best_matches(sequence, choices, threshold=0.9):
           (start_index, start_index + len(s1_sub)),
           (index2_start, index2_end)
         )
+        matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
         yield m
 
@@ -273,19 +326,16 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     'front/article-meta/contrib-group/contrib/aff',
     'front/article-meta/aff'
   ]
-  author_aff = flatten([
-    get_text_content_list(xml_root.xpath(xpath)) for xpath in author_aff_xpaths
-  ])
-  aff_extra = [
-    s.strip()
+  author_aff = filter_non_empty([
+    sorted([
+      s.strip()
+      for s in get_text_content_list(
+        xml_root.xpath('{}/*'.format(xpath))
+      )
+    ], key=lambda s: -len(s))
     for xpath in author_aff_xpaths
-    for s in get_text_content_list(
-      xml_root.xpath('{}/*'.format(xpath))
-    )
-  ]
-  get_logger().debug('aff_extra: %s', aff_extra)
-  if aff_extra:
-    author_aff.append(aff_extra)
+  ])
+  get_logger().debug('author_aff: %s', author_aff)
   target_annotations = []
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
@@ -336,10 +386,11 @@ class MatchingAnnotator(AbstractAnnotator):
             'tokens without tag: %s',
             [structured_document.get_text(token) for token in tokens]
           )
-          pending_sequences.append(SequenceWrapper(
+          pending_sequences.append(SequenceWrapperWithPosition(
             structured_document,
             tokens,
-            normalise_str
+            normalise_str,
+            position=len(pending_sequences)
           ))
 
     for target_annotation in self.target_annotations:
