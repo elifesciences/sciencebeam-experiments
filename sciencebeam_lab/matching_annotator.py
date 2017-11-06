@@ -57,15 +57,17 @@ def normalise_str_or_list(x):
 
 class XmlMapping(object):
   REGEX_SUFFIX = '.regex'
+  MATCH_MULTIPLE = '.match-multiple'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
-  def __init__(self, value, name):
+  def __init__(self, value, name, match_multiple=False):
     self.value = value
     self.name = name
+    self.match_multiple = match_multiple
 
   def __str__(self):
-    return u'{}: {}'.format(self.name, self.value)
+    return u'{} (match_multiple={}): {}'.format(self.name, self.match_multiple, self.value)
 
 class SequenceWrapper(object):
   def __init__(self, structured_document, tokens, str_filter_f=None):
@@ -278,7 +280,9 @@ DEFAULT_CHOICE_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
 )
 
 def find_best_matches(
-  sequence, choices,
+  target_annotation,
+  sequence,
+  choices,
   seq_match_filter=DEFAULT_SEQ_FUZZY_MATCH_FILTER,
   choice_match_filter=DEFAULT_CHOICE_FUZZY_MATCH_FILTER,
   max_gap=DEFAULT_MAX_MATCH_GAP,
@@ -291,6 +295,7 @@ def find_best_matches(
     # Use tee as choices may be an iterable instead of a list
     for s, sub_choices in zip(sequence, tee(choices, len(sequence))):
       matches = find_best_matches(
+        target_annotation,
         s,
         sub_choices,
         seq_match_filter=seq_match_filter,
@@ -333,7 +338,10 @@ def find_best_matches(
         index1_end = skip_whitespaces(s1, index1_end)
         if index1_end >= len(s1):
           get_logger().debug('end reached: %d >= %d', index1_end, len(s1))
-          break
+          if target_annotation.match_multiple:
+            start_index = 0
+          else:
+            break
         else:
           start_index = index1_end
           get_logger().debug('setting start index to: %d', start_index)
@@ -361,7 +369,8 @@ def find_best_matches(
         matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
         yield m
-        break
+        if not target_annotation.match_multiple:
+          break
 
 def parse_xml_mapping(xml_mapping_filename):
   with open(xml_mapping_filename, 'r') as f:
@@ -378,6 +387,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   mapping = xml_mapping[xml_root.tag]
 
   field_names = [k for k in mapping.keys() if '.' not in k]
+  get_match_multiple = lambda k: mapping.get(k + XmlMapping.MATCH_MULTIPLE) == 'true'
 
   get_logger().debug('fields: %s', field_names)
 
@@ -417,6 +427,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
+    match_multiple = get_match_multiple(k)
     re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
     for e in xml_root.xpath(mapping[k]):
@@ -431,7 +442,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
             get_logger().debug('regex match: %s: %s -> %s', k, re_pattern, m.groups())
             text_content = m.group(1)
         target_annotations_with_pos.append(
-          (e_pos, TargetAnnotation(text_content, k))
+          (e_pos, TargetAnnotation(text_content, k, match_multiple=match_multiple))
         )
   target_annotations_with_pos = sorted(
     target_annotations_with_pos,
@@ -440,12 +451,15 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   target_annotations.extend(
     x[1] for x in target_annotations_with_pos
   )
+  create_builtin_target_annotation = lambda s, k: TargetAnnotation(
+    s, k, match_multiple=get_match_multiple(k)
+  )
   target_annotations = (
     target_annotations +
-    [TargetAnnotation(s, 'keywords') for s in keywords] +
-    [TargetAnnotation(s, 'author') for s in authors] +
-    [TargetAnnotation(s, 'page_no') for s in pages] +
-    [TargetAnnotation(s, 'author_aff') for s in author_aff]
+    [create_builtin_target_annotation(s, 'keywords') for s in keywords] +
+    [create_builtin_target_annotation(s, 'author') for s in authors] +
+    [create_builtin_target_annotation(s, 'page_no') for s in pages] +
+    [create_builtin_target_annotation(s, 'author_aff') for s in author_aff]
   )
   get_logger().debug('target_annotations:\n%s', '\n'.join([
     ' ' + str(a) for a in target_annotations
@@ -478,12 +492,12 @@ class MatchingAnnotator(AbstractAnnotator):
           ))
 
     for target_annotation in self.target_annotations:
-      get_logger().debug('target annotation: %s', target_annotation.name)
+      get_logger().debug('target annotation: %s', target_annotation)
       target_value = normalise_str_or_list(target_annotation.value)
       untagged_pending_sequences = iter_flatten(
         seq.untagged_sub_sequences() for seq in pending_sequences
       )
-      for m in find_best_matches(target_value, untagged_pending_sequences):
+      for m in find_best_matches(target_annotation, target_value, untagged_pending_sequences):
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))
         get_logger().debug(

@@ -28,6 +28,9 @@ SOME_VALUE = 'some value'
 def _get_tags_of_tokens(tokens):
   return [t.get_tag() for t in tokens]
 
+def _copy_tokens(tokens):
+  return [SimpleToken(t.text) for t in tokens]
+
 class TestXmlRootToTargetAnnotations(object):
   def test_should_return_empty_target_annotations_for_empty_xml(self):
     xml_root = E.article(
@@ -80,6 +83,31 @@ class TestXmlRootToTargetAnnotations(object):
     assert len(target_annotations) == 1
     assert target_annotations[0].name == TAG1
     assert target_annotations[0].value == SOME_VALUE
+
+  def test_should_apply_match_multiple_flag(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title',
+        TAG1 + XmlMapping.MATCH_MULTIPLE: 'true'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [t.match_multiple for t in target_annotations] == [True]
+
+  def test_should_not_apply_match_multiple_flag_if_not_set(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [t.match_multiple for t in target_annotations] == [False]
 
   def test_should_return_full_text(self):
     xml_root = E.article(
@@ -408,6 +436,31 @@ class TestMatchingAnnotator(object):
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
     assert _get_tags_of_tokens(not_matching_tokens) == [None] * len(not_matching_tokens)
 
+  def test_should_annotate_same_sequence_multiple_times_if_enabled(self):
+    matching_tokens_per_line = [
+      [
+        SimpleToken('this'),
+        SimpleToken('is'),
+        SimpleToken('matching')
+      ],
+      [
+        SimpleToken('this'),
+        SimpleToken('is'),
+        SimpleToken('matching')
+      ]
+    ]
+
+    matching_tokens = flatten(matching_tokens_per_line)
+    target_annotations = [
+      TargetAnnotation('this is matching', TAG1, match_multiple=True)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens)
+      for tokens in matching_tokens_per_line
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
   def test_should_not_override_annotation(self):
     matching_tokens_per_line = [
       [
@@ -543,9 +596,7 @@ class TestMatchingAnnotator(object):
       SimpleToken('post')
     ]
     first_line_tokens = pre_tokens + matching_tokens + post_tokens
-    similar_line_tokens = [
-      SimpleToken(t.text) for t in first_line_tokens
-    ]
+    similar_line_tokens = _copy_tokens(first_line_tokens)
     target_annotations = [
       TargetAnnotation('this is matching', TAG1)
     ]
@@ -556,3 +607,27 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
     assert _get_tags_of_tokens(similar_line_tokens) == [None] * len(similar_line_tokens)
+
+  def test_should_annotate_shorter_target_annotation_in_longer_line_multiple_times_if_enabled(self):
+    pre_tokens = [
+      SimpleToken('pre')
+    ]
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    post_tokens = [
+      SimpleToken('post')
+    ]
+    same_matching_tokens = _copy_tokens(matching_tokens)
+    target_annotations = [
+      TargetAnnotation('this is matching', TAG1, match_multiple=True)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(pre_tokens + matching_tokens + post_tokens),
+      SimpleLine(_copy_tokens(pre_tokens) + same_matching_tokens + _copy_tokens(post_tokens))
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(same_matching_tokens) == [TAG1] * len(same_matching_tokens)
