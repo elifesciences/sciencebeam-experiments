@@ -3,6 +3,7 @@ from __future__ import division
 import logging
 from configparser import ConfigParser
 from builtins import str as text
+from itertools import tee
 
 from future.utils import python_2_unicode_compatible
 
@@ -15,7 +16,8 @@ from sciencebeam_lab.alignment.WordSequenceMatcher import (
 )
 
 from sciencebeam_lab.collection_utils import (
-  filter_non_empty
+  filter_non_empty,
+  iter_flatten
 )
 
 from sciencebeam_lab.xml_utils import (
@@ -63,6 +65,8 @@ class TargetAnnotation(object):
 
 class SequenceWrapper(object):
   def __init__(self, structured_document, tokens, str_filter_f=None):
+    self.structured_document = structured_document
+    self.str_filter_f = str_filter_f
     self.tokens = tokens
     self.token_str_list = [structured_document.get_text(t) or '' for t in tokens]
     self.tokens_as_str = ' '.join(self.token_str_list)
@@ -80,6 +84,27 @@ class SequenceWrapper(object):
         yield token
       i = token_end + 1
 
+  def sub_sequence_for_tokens(self, tokens):
+    return SequenceWrapper(self.structured_document, tokens, str_filter_f=self.str_filter_f)
+
+  def untagged_sub_sequences(self):
+    token_tags = [self.structured_document.get_tag(t) for t in self.tokens]
+    tagged_count = len([t for t in token_tags if t])
+    if tagged_count == 0:
+      yield self
+    elif tagged_count == len(self.tokens):
+      pass
+    else:
+      untagged_tokens = []
+      for token, tag in zip(self.tokens, token_tags):
+        if not tag:
+          untagged_tokens.append(token)
+        elif untagged_tokens:
+          yield self.sub_sequence_for_tokens(untagged_tokens)
+          untagged_tokens = []
+      if untagged_tokens:
+        yield self.sub_sequence_for_tokens(untagged_tokens)
+
   def __str__(self):
     return self.tokens_as_str
 
@@ -87,6 +112,13 @@ class SequenceWrapperWithPosition(SequenceWrapper):
   def __init__(self, *args, position=None, **kwargs):
     super(SequenceWrapperWithPosition, self).__init__(*args, **kwargs)
     self.position = position
+
+  def sub_sequence_for_tokens(self, tokens):
+    return SequenceWrapperWithPosition(
+      self.structured_document, tokens,
+      str_filter_f=self.str_filter_f,
+      position=self.position
+    )
 
 @python_2_unicode_compatible
 class SequenceMatch(object):
@@ -208,6 +240,16 @@ class PositionedSequenceSet(object):
   def __str__(self):
     return str(self.data)
 
+def offset_range_by(index_range, offset):
+  if not offset:
+    return index_range
+  return (offset + index_range[0], offset + index_range[1])
+
+def skip_whitespaces(s, start):
+  while start < len(s) and s[start].isspace():
+    start += 1
+  return start
+
 def find_best_matches(
   sequence, choices,
   threshold=DEFAULT_SCORE_THRESHOLD,
@@ -218,9 +260,10 @@ def find_best_matches(
     matched_choices = PositionedSequenceSet()
   if isinstance(sequence, list):
     get_logger().debug('found sequence list: %s', sequence)
-    for s in sequence:
+    # Use tee as choices may be an iterable instead of a list
+    for s, sub_choices in zip(sequence, tee(choices, len(sequence))):
       matches = find_best_matches(
-        s, choices, threshold=threshold, max_gap=max_gap, matched_choices=matched_choices
+        s, sub_choices, threshold=threshold, max_gap=max_gap, matched_choices=matched_choices
       )
       for m in matches:
         yield m
@@ -254,6 +297,7 @@ def find_best_matches(
         matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
         yield m
+        index1_end = skip_whitespaces(s1, index1_end)
         if index1_end >= len(s1):
           get_logger().debug('end reached: %d >= %d', index1_end, len(s1))
           break
@@ -272,15 +316,14 @@ def find_best_matches(
             matched_choices, choice
           )
           continue
-        index2_rel_range = m.a_index_range()
-        get_logger().debug('index2_rel_range: %s, start_index: %d', index2_rel_range, start_index)
-        index2_start = start_index + index2_rel_range[0]
-        index2_end = start_index + index2_rel_range[1]
+        index1_range = offset_range_by(m.b_index_range(), start_index)
+        index2_range = m.a_index_range()
+        get_logger().debug('index2_range: %s, start_index: %d', index2_range, start_index)
         m = SequenceMatch(
           sequence,
           choice,
-          (start_index, start_index + len(s1_sub)),
-          (index2_start, index2_end)
+          index1_range,
+          index2_range
         )
         matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
@@ -396,8 +439,10 @@ class MatchingAnnotator(AbstractAnnotator):
     for target_annotation in self.target_annotations:
       get_logger().debug('target annotation: %s', target_annotation.name)
       target_value = normalise_str_or_list(target_annotation.value)
-      updated_pending_sequences = pending_sequences.copy()
-      for m in find_best_matches(target_value, pending_sequences):
+      untagged_pending_sequences = iter_flatten(
+        seq.untagged_sub_sequences() for seq in pending_sequences
+      )
+      for m in find_best_matches(target_value, untagged_pending_sequences):
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))
         get_logger().debug(
@@ -411,16 +456,4 @@ class MatchingAnnotator(AbstractAnnotator):
               token,
               target_annotation.name
             )
-        num_tagged_tokens = sum(
-          1 if structured_document.get_tag(token) else 0
-          for token in choice.tokens
-        )
-        num_tokens = len(choice.tokens)
-        tagged_ratio = num_tagged_tokens / num_tokens
-        if tagged_ratio > 0.9:
-          try:
-            updated_pending_sequences.remove(choice)
-          except ValueError:
-            pass
-      pending_sequences = updated_pending_sequences
     return structured_document
