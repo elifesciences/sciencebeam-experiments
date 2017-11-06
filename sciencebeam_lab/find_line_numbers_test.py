@@ -1,3 +1,7 @@
+from sciencebeam_lab.collection_utils import (
+  flatten
+)
+
 from sciencebeam_lab.structured_document import (
   SimpleStructuredDocument,
   SimpleDocument,
@@ -85,3 +89,21 @@ class TestFindLxmlLineNumberTokens(object):
     ]
     actual_line_number_tokens = list(find_line_number_tokens(doc))
     assert actual_line_number_tokens == expected_line_number_tokens
+
+  def test_should_not_return_line_number_tokens_at_unusual_position2(self):
+    number_tokens = flatten([
+      [
+        SimpleToken(str(line_no), dict(
+          x=str(x * 50),
+          y=str(line_no * 20))
+        )
+        for line_no in range(1, 5)
+      ]
+      for x in range(1, 3)
+    ])
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine([number_token])
+      for number_token in number_tokens
+    ])
+    actual_line_number_tokens = list(find_line_number_tokens(doc))
+    assert actual_line_number_tokens == []

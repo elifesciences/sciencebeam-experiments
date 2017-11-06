@@ -1,6 +1,13 @@
 import logging
 from collections import Counter
 
+# Max absolute variation of x from the determined x for line numbers
+DEFAULT_X_THRESHOLD = 10
+
+# Minimum ratio of tokens within x threshold vs total number tokens on page
+# (low ratio indicates numbers may be figures or table values rather than line numbers)
+DEFAULT_TOKEN_RATIO_THRESHOLD = 0.7
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -16,7 +23,11 @@ def _find_line_number_token_candidates(structured_document, page):
       if token_text and token_text.isdigit():
         yield token
 
-def find_line_number_tokens(structured_document):
+def find_line_number_tokens(
+  structured_document,
+  x_threshold=DEFAULT_X_THRESHOLD,
+  token_ratio_threshold=DEFAULT_TOKEN_RATIO_THRESHOLD):
+
   for page in structured_document.get_pages():
     line_number_candidates = list(_find_line_number_token_candidates(
       structured_document,
@@ -31,16 +42,18 @@ def find_line_number_tokens(structured_document):
       get_logger().debug('counter: %s', c)
       most_common_x, most_common_count = c.most_common(1)[0]
       get_logger().debug('most_common: x: %s (count: %s)', most_common_x, most_common_count)
-      for token in line_number_candidates:
-        x = float(token.attrib['x'])
-        if abs(x - most_common_x) < 10:
-          get_logger().debug(
-            'line no token: most_common_x=%s, token_x=%s, token=%s',
-            most_common_x, structured_document.get_x(token), structured_document.get_text(token)
-          )
+      tokens_within_range = [
+        token
+        for token in line_number_candidates
+        if abs(float(token.attrib['x']) - most_common_x) < x_threshold
+      ]
+      token_within_range_ratio = len(tokens_within_range) / len(line_number_candidates)
+      if token_within_range_ratio < token_ratio_threshold:
+        get_logger().debug(
+          'token within range ratio not meeting threshold: %f < %f',
+          token_within_range_ratio,
+          token_ratio_threshold
+        )
+      else:
+        for token in tokens_within_range:
           yield token
-        else:
-          get_logger().debug(
-            'line no exeeds threshold token: most_common_x=%s, token_x=%s, token=%s',
-            most_common_x, structured_document.get_x(token), structured_document.get_text(token)
-          )
