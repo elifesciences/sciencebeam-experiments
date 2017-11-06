@@ -44,7 +44,7 @@ def get_logger():
   return logging.getLogger(__name__)
 
 def normalise_str(s):
-  return s.replace(EM_DASH, u'-').replace(EN_DASH, u'-').replace(THIN_SPACE, ' ')
+  return s.lower().replace(EM_DASH, u'-').replace(EN_DASH, u'-').replace(THIN_SPACE, ' ')
 
 def normalise_str_or_list(x):
   if isinstance(x, list):

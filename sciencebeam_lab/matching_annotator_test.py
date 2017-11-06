@@ -138,6 +138,19 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
+  def test_should_match_case_insensitive(self):
+    matching_tokens = [
+      SimpleToken('This'),
+      SimpleToken('Is'),
+      SimpleToken('Matching')
+    ]
+    target_annotations = [
+      TargetAnnotation('tHIS iS mATCHING', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
   def test_should_prefer_word_boundaries(self):
     pre_tokens = [
       SimpleToken('this')
