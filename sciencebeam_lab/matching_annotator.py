@@ -152,17 +152,29 @@ class LazyStr(object):
   def __str__(self):
     return self.fn()
 
+def len_index_range(index_range):
+  return index_range[1] - index_range[0]
+
 class FuzzyMatchResult(object):
   def __init__(self, a, b, matching_blocks):
     self.a = a
     self.b = b
     self.matching_blocks = matching_blocks
     self.non_empty_matching_blocks = [x for x in self.matching_blocks if x[-1]]
+    self._match_count = None
     self._a_index_range = None
     self._b_index_range = None
 
   def match_count(self):
-    return sum(triple[-1] for triple in self.matching_blocks)
+    if self._match_count is None:
+      self._match_count = sum(triple[-1] for triple in self.matching_blocks)
+    return self._match_count
+
+  def ratio(self):
+    max_len = max(len_index_range(self.a_index_range()), len_index_range(self.b_index_range()))
+    if not max_len:
+      return 0.0
+    return self.match_count() / max_len
 
   def a_ratio(self):
     return self.match_count() / len(self.a)
@@ -176,7 +188,7 @@ class FuzzyMatchResult(object):
     but also adds any gaps / mismatches within a.
     """
     a_index_range = self.a_index_range()
-    a_match_len = a_index_range[1] - a_index_range[0]
+    a_match_len = len_index_range(a_index_range)
     match_count = self.match_count()
     a_gaps = a_match_len - match_count
     return match_count / (len(self.b) + a_gaps)
@@ -213,8 +225,8 @@ class FuzzyMatchResult(object):
     return LazyStr(self.detailed_str)
 
   def __str__(self):
-    return 'FuzzyMatchResult(matching_blocks={}, b_gap_ratio={})'.format(
-      self.matching_blocks, self.b_gap_ratio()
+    return 'FuzzyMatchResult(matching_blocks={}, match_count={}, ratio={}, b_gap_ratio={})'.format(
+      self.matching_blocks, self.match_count(), self.ratio(), self.b_gap_ratio()
     )
 
 def fuzzy_match(a, b, exact_word_match_threshold=5):
