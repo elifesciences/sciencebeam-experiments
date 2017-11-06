@@ -354,6 +354,29 @@ class TestMatchingAnnotator(object):
     assert _get_tags_of_tokens(tag1_tokens) == [TAG1] * len(tag1_tokens)
     assert _get_tags_of_tokens(tag2_tokens) == [TAG2] * len(tag2_tokens)
 
+  def test_should_not_annotate_too_short_match_of_longer_sequence(self):
+    matching_tokens = [
+      SimpleToken('this'),
+      SimpleToken('is'),
+      SimpleToken('matching')
+    ]
+    too_short_tokens = [
+      SimpleToken('1')
+    ]
+    tokens_per_line = [
+      too_short_tokens,
+      matching_tokens
+    ]
+    target_annotations = [
+      TargetAnnotation('this is matching 1', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[
+      SimpleLine(tokens) for tokens in tokens_per_line
+    ])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(too_short_tokens) == [None] * len(too_short_tokens)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
   def test_should_not_annotate_similar_sequence_multiple_times(self):
     matching_tokens_per_line = [
       [

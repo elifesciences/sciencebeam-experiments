@@ -254,9 +254,33 @@ def skip_whitespaces(s, start):
     start += 1
   return start
 
+def get_fuzzy_match_filter(score_threshold, min_match_count, total_match_threshold):
+  def check(m):
+    return (
+      m.b_gap_ratio() >= score_threshold and
+      (
+        m.match_count() >= min_match_count or
+        m.a_ratio() >= total_match_threshold
+      )
+    )
+  return check
+
+DEFAULT_SEQ_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
+  DEFAULT_SCORE_THRESHOLD,
+  5,
+  0.9
+)
+
+DEFAULT_CHOICE_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
+  DEFAULT_SCORE_THRESHOLD,
+  1,
+  0.9
+)
+
 def find_best_matches(
   sequence, choices,
-  threshold=DEFAULT_SCORE_THRESHOLD,
+  seq_match_filter=DEFAULT_SEQ_FUZZY_MATCH_FILTER,
+  choice_match_filter=DEFAULT_CHOICE_FUZZY_MATCH_FILTER,
   max_gap=DEFAULT_MAX_MATCH_GAP,
   matched_choices=None):
 
@@ -267,7 +291,12 @@ def find_best_matches(
     # Use tee as choices may be an iterable instead of a list
     for s, sub_choices in zip(sequence, tee(choices, len(sequence))):
       matches = find_best_matches(
-        s, sub_choices, threshold=threshold, max_gap=max_gap, matched_choices=matched_choices
+        s,
+        sub_choices,
+        seq_match_filter=seq_match_filter,
+        choice_match_filter=choice_match_filter,
+        max_gap=max_gap,
+        matched_choices=matched_choices
       )
       for m in matches:
         yield m
@@ -282,7 +311,7 @@ def find_best_matches(
       m = fuzzy_match(s1, choice_str)
       get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
-      if m.b_gap_ratio() >= threshold:
+      if seq_match_filter(m):
         if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
           get_logger().debug(
             'ignoring match as too distant from previous matches: %s (%s)',
@@ -313,7 +342,7 @@ def find_best_matches(
       m = fuzzy_match(choice_str, s1_sub)
       get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
-      if m.b_gap_ratio() >= threshold:
+      if choice_match_filter(m):
         if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
           get_logger().debug(
             'ignoring match as too distant from previous matches: %s (%s)',
