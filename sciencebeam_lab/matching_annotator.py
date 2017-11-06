@@ -332,6 +332,7 @@ def find_best_matches(
         matched_choices.add(choice)
         get_logger().debug('found match: %s', m)
         yield m
+        break
 
 def parse_xml_mapping(xml_mapping_filename):
   with open(xml_mapping_filename, 'r') as f:
