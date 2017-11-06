@@ -12,7 +12,8 @@ from sciencebeam_lab.matching_annotator import (
   xml_root_to_target_annotations,
   THIN_SPACE,
   EN_DASH,
-  EM_DASH
+  EM_DASH,
+  XmlMapping
 )
 
 from sciencebeam_lab.collection_utils import (
@@ -58,6 +59,21 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert len(target_annotations) == 1
+    assert target_annotations[0].name == TAG1
+    assert target_annotations[0].value == SOME_VALUE
+
+  def test_should_apply_regex_to_result(self):
+    xml_root = E.article(
+      E.title('1.1. ' + SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title',
+        TAG1 + XmlMapping.REGEX_SUFFIX: r'(?:\d+\.?)* ?(.*)'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)

@@ -1,6 +1,7 @@
 from __future__ import division
 
 import logging
+import re
 from configparser import ConfigParser
 from builtins import str as text
 from itertools import tee
@@ -53,6 +54,9 @@ def normalise_str_or_list(x):
     return [normalise_str(s) for s in x]
   else:
     return normalise_str(x)
+
+class XmlMapping(object):
+  REGEX_SUFFIX = '.regex'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -383,12 +387,19 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
+    re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
+    re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
     for e in xml_root.xpath(mapping[k]):
       e_pos = xml_pos_by_node.get(e)
       text_content = (get_text_content(
         e
       ) or '').strip()
       if text_content:
+        if re_compiled_pattern:
+          m = re_compiled_pattern.match(text_content)
+          if m:
+            get_logger().debug('regex match: %s: %s -> %s', k, re_pattern, m.groups())
+            text_content = m.group(1)
         target_annotations_with_pos.append(
           (e_pos, TargetAnnotation(text_content, k))
         )
