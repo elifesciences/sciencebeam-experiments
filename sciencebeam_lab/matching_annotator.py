@@ -60,15 +60,17 @@ def normalise_str_or_list(x):
 class XmlMapping(object):
   REGEX_SUFFIX = '.regex'
   MATCH_MULTIPLE = '.match-multiple'
+  BONDING = '.bonding'
   CHILDREN = '.children'
   CHILDREN_CONCAT = '.children.concat'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
-  def __init__(self, value, name, match_multiple=False):
+  def __init__(self, value, name, match_multiple=False, bonding=False):
     self.value = value
     self.name = name
     self.match_multiple = match_multiple
+    self.bonding = bonding
 
   def __str__(self):
     return u'{} (match_multiple={}): {}'.format(self.name, self.match_multiple, self.value)
@@ -506,7 +508,9 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   mapping = xml_mapping[xml_root.tag]
 
   field_names = [k for k in mapping.keys() if '.' not in k]
-  get_match_multiple = lambda k: mapping.get(k + XmlMapping.MATCH_MULTIPLE) == 'true'
+  get_mapping_flag = lambda k, suffix: mapping.get(k + suffix) == 'true'
+  get_match_multiple = lambda k: get_mapping_flag(k, XmlMapping.MATCH_MULTIPLE)
+  get_bonding_flag = lambda k: get_mapping_flag(k, XmlMapping.BONDING)
 
   get_logger().debug('fields: %s', field_names)
 
@@ -547,6 +551,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
     match_multiple = get_match_multiple(k)
+    bonding = get_bonding_flag(k)
     children_pattern = mapping.get(k + XmlMapping.CHILDREN)
     children_concat_str = mapping.get(k + XmlMapping.CHILDREN_CONCAT)
     children_concat = json.loads(children_concat_str) if children_concat_str else []
@@ -571,9 +576,15 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
           if len(text_content_list) == 1
           else sorted(text_content_list, key=lambda s: -len(s))
         )
-        target_annotations_with_pos.append(
-          (e_pos, TargetAnnotation(value, k, match_multiple=match_multiple))
-        )
+        target_annotations_with_pos.append((
+          e_pos,
+          TargetAnnotation(
+            value,
+            k,
+            match_multiple=match_multiple,
+            bonding=bonding
+          )
+        ))
   target_annotations_with_pos = sorted(
     target_annotations_with_pos,
     key=lambda x: x[0]
@@ -621,13 +632,27 @@ class MatchingAnnotator(AbstractAnnotator):
             position=len(pending_sequences)
           ))
 
+    matched_choices_map = dict()
     for target_annotation in self.target_annotations:
       get_logger().debug('target annotation: %s', target_annotation)
       target_value = normalise_str_or_list(target_annotation.value)
       untagged_pending_sequences = iter_flatten(
         seq.untagged_sub_sequences() for seq in pending_sequences
       )
-      for m in find_best_matches(target_annotation, target_value, untagged_pending_sequences):
+      if target_annotation.bonding:
+        matched_choices = matched_choices_map.setdefault(
+          target_annotation.name,
+          PositionedSequenceSet()
+        )
+      else:
+        matched_choices = PositionedSequenceSet()
+      matches = find_best_matches(
+        target_annotation,
+        target_value,
+        untagged_pending_sequences,
+        matched_choices=matched_choices
+      )
+      for m in matches:
         choice = m.seq2
         matching_tokens = list(choice.tokens_between(m.index2_range))
         get_logger().debug(

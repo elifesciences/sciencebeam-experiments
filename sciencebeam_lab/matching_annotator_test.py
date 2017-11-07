@@ -38,6 +38,12 @@ def _copy_tokens(tokens):
 def _tokens_for_text(text):
   return [SimpleToken(s) for s in text.split(' ')]
 
+def _lines_for_tokens(tokens_by_line):
+  return [SimpleLine(tokens) for tokens in tokens_by_line]
+
+def _document_for_tokens(tokens_by_line):
+  return SimpleStructuredDocument(lines=_lines_for_tokens(tokens_by_line))
+
 class TestXmlRootToTargetAnnotations(object):
   def test_should_return_empty_target_annotations_for_empty_xml(self):
     xml_root = E.article(
@@ -115,6 +121,31 @@ class TestXmlRootToTargetAnnotations(object):
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
     assert [t.match_multiple for t in target_annotations] == [False]
+
+  def test_should_apply_match_bonding_flag(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title',
+        TAG1 + XmlMapping.BONDING: 'true'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [t.bonding for t in target_annotations] == [True]
+
+  def test_should_not_apply_match_bonding_flag_if_not_set(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [t.bonding for t in target_annotations] == [False]
 
   def test_should_apply_children_xpaths_and_sort_by_value_descending(self):
     xml_root = E.article(
@@ -360,26 +391,34 @@ class TestMatchingAnnotator(object):
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
   def test_should_annotate_not_match_distant_value_of_multiple_value_target_annotation(self):
-    matching_tokens = [
-      SimpleToken('this'),
-      SimpleToken('may'),
-      SimpleToken('match')
-    ]
-    distant_matching_tokens = [
-      SimpleToken('not')
-    ]
+    matching_tokens = _tokens_for_text('this may match')
+    distant_matching_tokens = _tokens_for_text('not')
     distance_in_lines = 10
     tokens_by_line = [matching_tokens] + [
-      [SimpleToken('other')] for _ in range(distance_in_lines)
+      _tokens_for_text('other') for _ in range(distance_in_lines)
     ] + [distant_matching_tokens]
     target_annotations = [
       TargetAnnotation([
         'this', 'may', 'match', 'not'
       ], TAG1)
     ]
-    doc = SimpleStructuredDocument(lines=[
-      SimpleLine(tokens) for tokens in tokens_by_line
-    ])
+    doc = _document_for_tokens(tokens_by_line)
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(distant_matching_tokens) == [None] * len(distant_matching_tokens)
+
+  def test_should_annotate_not_match_distant_value_of_target_annotation_with_bonding(self):
+    matching_tokens = _tokens_for_text('this may match')
+    distant_matching_tokens = _tokens_for_text('not')
+    distance_in_lines = 10
+    tokens_by_line = [matching_tokens] + [
+      _tokens_for_text('other') for _ in range(distance_in_lines)
+    ] + [distant_matching_tokens]
+    target_annotations = [
+      TargetAnnotation('this may match', TAG1, bonding=True),
+      TargetAnnotation('not', TAG1, bonding=True)
+    ]
+    doc = _document_for_tokens(tokens_by_line)
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
     assert _get_tags_of_tokens(distant_matching_tokens) == [None] * len(distant_matching_tokens)
