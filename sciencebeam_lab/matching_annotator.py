@@ -531,21 +531,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
       get_text_content(e.find('surname'))
     ) for e in xml_root.xpath('front/article-meta/contrib-group/contrib/name')
   ]
-  author_aff_xpaths = [
-    'front/article-meta/contrib-group/aff',
-    'front/article-meta/contrib-group/contrib/aff',
-    'front/article-meta/aff'
-  ]
-  author_aff = filter_truthy([
-    sorted([
-      s.strip()
-      for s in get_text_content_list(
-        xml_root.xpath('{}/*'.format(xpath))
-      )
-    ], key=lambda s: -len(s))
-    for xpath in author_aff_xpaths
-  ])
-  get_logger().debug('author_aff: %s', author_aff)
   target_annotations = []
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
@@ -601,8 +586,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     target_annotations +
     [create_builtin_target_annotation(s, 'keywords') for s in keywords] +
     [create_builtin_target_annotation(s, 'author') for s in authors] +
-    [create_builtin_target_annotation(s, 'page_no') for s in pages] +
-    [create_builtin_target_annotation(s, 'author_aff') for s in author_aff]
+    [create_builtin_target_annotation(s, 'page_no') for s in pages]
   )
   get_logger().debug('target_annotations:\n%s', '\n'.join([
     ' ' + str(a) for a in target_annotations
