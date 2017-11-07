@@ -2,9 +2,10 @@ from __future__ import division
 
 import logging
 import re
+import json
 from configparser import ConfigParser
 from builtins import str as text
-from itertools import tee
+from itertools import tee, chain
 
 from future.utils import python_2_unicode_compatible
 
@@ -60,6 +61,7 @@ class XmlMapping(object):
   REGEX_SUFFIX = '.regex'
   MATCH_MULTIPLE = '.match-multiple'
   CHILDREN = '.children'
+  CHILDREN_CONCAT = '.children.concat'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -454,8 +456,46 @@ def iter_parents(children):
       yield p
 
 def exclude_parents(children):
+  if not isinstance(children, list):
+    children = list(children)
   all_parents = set(iter_parents(children))
   return [child for child in children if not child in all_parents]
+
+def parse_children_concat(parent, children_concat):
+  used_nodes = set()
+  concat_values_list = []
+  get_logger().debug('children_concat: %s', children_concat)
+  for children_concat_item in children_concat:
+    temp_used_nodes = set()
+    temp_concat_values = []
+    for children_concat_source in children_concat_item:
+      xpath = children_concat_source.get('xpath')
+      if xpath:
+        matching_nodes = parent.xpath(xpath)
+        if not matching_nodes:
+          get_logger().info('no item found for, skipping concat: %s', xpath)
+          temp_used_nodes = set()
+          temp_concat_values = []
+          break
+        temp_used_nodes |= set(matching_nodes)
+        value = ' '.join(get_text_content_list(exclude_parents(matching_nodes)))
+      else:
+        value = children_concat_source.get('value')
+      temp_concat_values.append(value or '')
+    used_nodes |= temp_used_nodes
+    if temp_concat_values:
+      concat_values_list.append(''.join(temp_concat_values))
+  return concat_values_list, used_nodes
+
+def parse_children(parent, children_pattern, children_concat):
+  concat_values_list, used_nodes = parse_children_concat(parent, children_concat)
+  text_content_list = filter_truthy(strip_all(
+    get_text_content_list(exclude_parents(
+      node for node in parent.xpath(children_pattern) if not node in used_nodes
+    )) + concat_values_list
+  ))
+  return text_content_list
+
 
 def xml_root_to_target_annotations(xml_root, xml_mapping):
   if not xml_root.tag in xml_mapping:
@@ -508,15 +548,17 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   for k in field_names:
     match_multiple = get_match_multiple(k)
     children_pattern = mapping.get(k + XmlMapping.CHILDREN)
+    children_concat_str = mapping.get(k + XmlMapping.CHILDREN_CONCAT)
+    children_concat = json.loads(children_concat_str) if children_concat_str else []
     re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
 
     for e in xml_root.xpath(mapping[k]):
       e_pos = xml_pos_by_node.get(e)
       if children_pattern:
-        text_content_list = filter_truthy(strip_all(
-          get_text_content_list(exclude_parents(e.xpath(children_pattern)))
-        ))
+        text_content_list = parse_children(
+          e, children_pattern, children_concat
+        )
       else:
         text_content_list = filter_truthy(strip_all([get_text_content(e)]))
       if re_compiled_pattern:

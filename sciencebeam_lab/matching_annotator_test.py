@@ -1,3 +1,5 @@
+import json
+
 from lxml.builder import E
 
 from sciencebeam_lab.structured_document import (
@@ -115,7 +117,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: '*'
+        TAG1 + XmlMapping.CHILDREN: './/*'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -142,6 +144,64 @@ class TestXmlRootToTargetAnnotations(object):
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
     assert [(t.name, t.value) for t in target_annotations] == [
       (TAG1, [SOME_LONGER_VALUE, SOME_SHORTER_VALUE])
+    ]
+
+  def test_should_apply_concat_children(self):
+    num_values = ['101', '202']
+    xml_root = E.article(
+      E.entry(
+        E.parent(
+          E.child1(SOME_VALUE),
+          E.fpage(num_values[0]),
+          E.lpage(num_values[1])
+        )
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMapping.CHILDREN: './/*',
+        TAG1 + XmlMapping.CHILDREN_CONCAT: json.dumps([[{
+          'xpath': './/fpage'
+        }, {
+          'value': '-'
+        }, {
+          'xpath': './/lpage'
+        }]])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [SOME_VALUE, '-'.join(num_values)])
+    ]
+
+  def test_should_not_apply_concat_children_if_one_node_was_not_found(self):
+    num_values = ['101', '202']
+    xml_root = E.article(
+      E.entry(
+        E.parent(
+          E.child1(SOME_VALUE),
+          E.fpage(num_values[0]),
+          E.lpage(num_values[1])
+        )
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMapping.CHILDREN: './/*',
+        TAG1 + XmlMapping.CHILDREN_CONCAT: json.dumps([[{
+          'xpath': './/fpage'
+        }, {
+          'value': '-'
+        }, {
+          'xpath': './/unknown'
+        }]])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [SOME_VALUE, num_values[0], num_values[1]])
     ]
 
   def test_should_not_apply_match_multiple_flag_if_not_set(self):
