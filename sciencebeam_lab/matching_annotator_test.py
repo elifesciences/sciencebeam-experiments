@@ -31,6 +31,9 @@ def _get_tags_of_tokens(tokens):
 def _copy_tokens(tokens):
   return [SimpleToken(t.text) for t in tokens]
 
+def _tokens_for_text(text):
+  return [SimpleToken(s) for s in text.split(' ')]
+
 class TestXmlRootToTargetAnnotations(object):
   def test_should_return_empty_target_annotations_for_empty_xml(self):
     xml_root = E.article(
@@ -318,6 +321,20 @@ class TestMatchingAnnotator(object):
     doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [None] * len(matching_tokens)
+
+  def test_should_annotate_fuzzily_matching_longer_matches_based_on_ratio(self):
+    long_matching_text = 'this is matching and is really really long match that we can trust'
+    matching_tokens = _tokens_for_text(long_matching_text)
+    no_matching_tokens = _tokens_for_text('what comes next is different')
+    target_annotations = [
+      TargetAnnotation(long_matching_text + ' but this is not and is another matter', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(
+      matching_tokens + no_matching_tokens
+    )])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+    assert _get_tags_of_tokens(no_matching_tokens) == [None] * len(no_matching_tokens)
 
   def test_should_not_annotate_not_matching(self):
     not_matching_tokens = [

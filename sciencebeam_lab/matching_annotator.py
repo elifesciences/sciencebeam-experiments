@@ -268,10 +268,16 @@ def skip_whitespaces(s, start):
     start += 1
   return start
 
-def get_fuzzy_match_filter(score_threshold, min_match_count, total_match_threshold):
+def get_fuzzy_match_filter(
+  b_score_threshold, min_match_count, total_match_threshold,
+  ratio_min_match_count, ratio_threshold):
   def check(m):
+    if (
+      m.match_count() >= ratio_min_match_count and
+      m.ratio() >= ratio_threshold):
+      return True
     return (
-      m.b_gap_ratio() >= score_threshold and
+      m.b_gap_ratio() >= b_score_threshold and
       (
         m.match_count() >= min_match_count or
         m.a_ratio() >= total_match_threshold
@@ -282,12 +288,16 @@ def get_fuzzy_match_filter(score_threshold, min_match_count, total_match_thresho
 DEFAULT_SEQ_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
   DEFAULT_SCORE_THRESHOLD,
   5,
+  0.9,
+  50,
   0.9
 )
 
 DEFAULT_CHOICE_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
   DEFAULT_SCORE_THRESHOLD,
   1,
+  0.9,
+  100,
   0.9
 )
 
