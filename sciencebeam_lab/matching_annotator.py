@@ -525,12 +525,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     pages = [str(p) for p in range(int(first_page[0]), int(last_page[0]) + 1)]
   else:
     pages = []
-  authors = [
-    '{} {}'.format(
-      get_text_content(e.find('given-names')),
-      get_text_content(e.find('surname'))
-    ) for e in xml_root.xpath('front/article-meta/contrib-group/contrib/name')
-  ]
   target_annotations = []
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
@@ -585,7 +579,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   target_annotations = (
     target_annotations +
     [create_builtin_target_annotation(s, 'keywords') for s in keywords] +
-    [create_builtin_target_annotation(s, 'author') for s in authors] +
     [create_builtin_target_annotation(s, 'page_no') for s in pages]
   )
   get_logger().debug('target_annotations:\n%s', '\n'.join([
