@@ -35,3 +35,12 @@ class TestWordSequenceMatcher(object):
       len(b_words[0]) + 1,
       len(WORD_1)
     )]
+
+  def test_should_match_same_words_standalone_ignore_comma_after_word(self):
+    sm = WordSequenceMatcher(None, WORD_1 + ',', WORD_1)
+    matching_blocks = sm.get_matching_blocks()
+    assert matching_blocks == [(
+      0,
+      0,
+      len(WORD_1)
+    )]
