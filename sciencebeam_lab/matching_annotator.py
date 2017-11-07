@@ -332,21 +332,19 @@ def find_best_matches(
     return
   start_index = 0
   s1 = text(sequence)
+  too_distant_choices = []
   for choice in choices:
     choice_str = text(choice)
     if not choice_str:
       return
+    if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
+      too_distant_choices.append(choice)
+      continue
     if len(s1) - start_index >= len(choice_str):
       m = fuzzy_match(s1, choice_str)
       get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
       if seq_match_filter(m):
-        if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
-          get_logger().debug(
-            'ignoring match as too distant from previous matches: %s (%s)',
-            matched_choices, choice
-          )
-          continue
         index1_range = m.a_index_range()
         index2_range = m.b_index_range()
         index1_end = index1_range[1]
@@ -375,12 +373,6 @@ def find_best_matches(
       get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
       get_logger().debug('detailed match: %s', m.detailed())
       if choice_match_filter(m):
-        if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
-          get_logger().debug(
-            'ignoring match as too distant from previous matches: %s (%s)',
-            matched_choices, choice
-          )
-          continue
         index1_range = offset_range_by(m.b_index_range(), start_index)
         index2_range = m.a_index_range()
         get_logger().debug('index2_range: %s, start_index: %d', index2_range, start_index)
@@ -395,6 +387,12 @@ def find_best_matches(
         yield m
         if not target_annotation.match_multiple:
           break
+  if too_distant_choices:
+    get_logger().debug(
+      'ignored too distant choices: matched=%s (ignored=%s)',
+      matched_choices,
+      LazyStr(lambda: ' '.join(str(choice.position) for choice in too_distant_choices))
+    )
 
 def parse_xml_mapping(xml_mapping_filename):
   with open(xml_mapping_filename, 'r') as f:
