@@ -104,6 +104,18 @@ class TestXmlRootToTargetAnnotations(object):
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
     assert [t.match_multiple for t in target_annotations] == [True]
 
+  def test_should_not_apply_match_multiple_flag_if_not_set(self):
+    xml_root = E.article(
+      E.title(SOME_VALUE)
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'title'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [t.match_multiple for t in target_annotations] == [False]
+
   def test_should_apply_children_xpaths_and_sort_by_value_descending(self):
     xml_root = E.article(
       E.entry(
@@ -203,18 +215,6 @@ class TestXmlRootToTargetAnnotations(object):
     assert [(t.name, t.value) for t in target_annotations] == [
       (TAG1, [SOME_VALUE, num_values[0], num_values[1]])
     ]
-
-  def test_should_not_apply_match_multiple_flag_if_not_set(self):
-    xml_root = E.article(
-      E.title(SOME_VALUE)
-    )
-    xml_mapping = {
-      'article': {
-        TAG1: 'title'
-      }
-    }
-    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
-    assert [t.match_multiple for t in target_annotations] == [False]
 
   def test_should_return_full_text(self):
     xml_root = E.article(
