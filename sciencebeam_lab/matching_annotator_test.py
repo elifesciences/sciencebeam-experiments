@@ -337,6 +337,17 @@ class TestMatchingAnnotator(object):
     MatchingAnnotator(target_annotations).annotate(doc)
     assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
 
+  def test_should_annotate_ignoring_space_after_dot_short_sequence(self):
+    matching_tokens = [
+      SimpleToken('A.B.,'),
+    ]
+    target_annotations = [
+      TargetAnnotation('A. B.', TAG1)
+    ]
+    doc = SimpleStructuredDocument(lines=[SimpleLine(matching_tokens)])
+    MatchingAnnotator(target_annotations).annotate(doc)
+    assert _get_tags_of_tokens(matching_tokens) == [TAG1] * len(matching_tokens)
+
   def test_should_annotate_with_local_matching_smaller_gaps(self):
     matching_tokens = [
       SimpleToken('this'),

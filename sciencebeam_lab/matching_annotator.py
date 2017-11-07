@@ -157,6 +157,9 @@ class LazyStr(object):
 def len_index_range(index_range):
   return index_range[1] - index_range[0]
 
+# Treat space or comma after a dot as junk
+DEFAULT_ISJUNK = lambda s, i: i > 0 and s[i - 1] == '.' and (s[i] == ' ' or s[i] == ',')
+
 class FuzzyMatchResult(object):
   def __init__(self, a, b, matching_blocks):
     self.a = a
@@ -166,23 +169,48 @@ class FuzzyMatchResult(object):
     self._match_count = None
     self._a_index_range = None
     self._b_index_range = None
+    self.isjunk = DEFAULT_ISJUNK
 
   def match_count(self):
     if self._match_count is None:
       self._match_count = sum(triple[-1] for triple in self.matching_blocks)
     return self._match_count
 
-  def ratio(self):
-    max_len = max(len_index_range(self.a_index_range()), len_index_range(self.b_index_range()))
-    if not max_len:
+  def ratio_to(self, size):
+    if not size:
       return 0.0
-    return self.match_count() / max_len
+    return self.match_count() / size
+
+  def ratio(self):
+    a_match_len = len_index_range(self.a_index_range())
+    b_match_len = len_index_range(self.b_index_range())
+    max_len = max(a_match_len, b_match_len)
+    if max_len == a_match_len:
+      junk_match_count = self.a_junk_match_count()
+    else:
+      junk_match_count = self.b_junk_match_count()
+    max_len_excl_junk = max_len - junk_match_count
+    return self.ratio_to(max_len_excl_junk)
+
+  def count_junk_between(self, s, index_range):
+    if not self.isjunk:
+      return 0
+    return sum(self.isjunk(s, i) for i in range(index_range[0], index_range[1]))
+
+  def a_junk_match_count(self):
+    return self.count_junk_between(self.a, self.a_index_range())
+
+  def b_junk_match_count(self):
+    return self.count_junk_between(self.b, self.b_index_range())
+
+  def b_junk_count(self):
+    return self.count_junk_between(self.b, (0, len(self.b)))
 
   def a_ratio(self):
-    return self.match_count() / len(self.a)
+    return self.ratio_to(len(self.a) - self.a_junk_match_count())
 
   def b_ratio(self):
-    return self.match_count() / len(self.b)
+    return self.ratio_to(len(self.b) - self.b_junk_match_count())
 
   def b_gap_ratio(self):
     """
@@ -192,27 +220,36 @@ class FuzzyMatchResult(object):
     a_index_range = self.a_index_range()
     a_match_len = len_index_range(a_index_range)
     match_count = self.match_count()
+    a_junk_match_count = self.a_junk_match_count()
+    b_junk_count = self.b_junk_count()
     a_gaps = a_match_len - match_count
-    return match_count / (len(self.b) + a_gaps)
+    return match_count / (len(self.b) + a_gaps - a_junk_match_count - b_junk_count)
+
+  def a_matching_blocks(self):
+    return ((a, size) for a, _, size in self.non_empty_matching_blocks)
+
+  def b_matching_blocks(self):
+    return ((b, size) for _, b, size in self.non_empty_matching_blocks)
+
+  def index_range_for_matching_blocks(self, seq_matching_blocks):
+    list_1, list_2 = tee(seq_matching_blocks)
+    return (
+      min(i for i, size in list_1),
+      max(i + size for i, size in list_2)
+    )
 
   def a_index_range(self):
     if not self.non_empty_matching_blocks:
       return (0, 0)
     if not self._a_index_range:
-      self._a_index_range = (
-        min(a for a, _, size in self.non_empty_matching_blocks),
-        max(a + size for a, _, size in self.non_empty_matching_blocks)
-      )
+      self._a_index_range = self.index_range_for_matching_blocks(self.a_matching_blocks())
     return self._a_index_range
 
   def b_index_range(self):
     if not self.non_empty_matching_blocks:
       return (0, 0)
     if not self._b_index_range:
-      self._b_index_range = (
-        min(b for _, b, size in self.non_empty_matching_blocks),
-        max(b + size for _, b, size in self.non_empty_matching_blocks)
-      )
+      self._b_index_range = self.index_range_for_matching_blocks(self.b_matching_blocks())
     return self._b_index_range
 
   def detailed_str(self):
@@ -227,8 +264,11 @@ class FuzzyMatchResult(object):
     return LazyStr(self.detailed_str)
 
   def __str__(self):
-    return 'FuzzyMatchResult(matching_blocks={}, match_count={}, ratio={}, b_gap_ratio={})'.format(
-      self.matching_blocks, self.match_count(), self.ratio(), self.b_gap_ratio()
+    return (
+      'FuzzyMatchResult(matching_blocks={}, match_count={}, ratio={},'
+      ' a_ratio={}, b_gap_ratio={})'.format(
+        self.matching_blocks, self.match_count(), self.ratio(), self.a_ratio(), self.b_gap_ratio()
+      )
     )
 
 def fuzzy_match(a, b, exact_word_match_threshold=5):
