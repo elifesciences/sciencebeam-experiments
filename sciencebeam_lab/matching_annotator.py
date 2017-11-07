@@ -558,7 +558,9 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
 
-    for e in xml_root.xpath(mapping[k]):
+    xpaths = strip_all(mapping[k].strip().split('\n'))
+    get_logger().debug('xpaths(%s): %s', k, xpaths)
+    for e in chain(*[xml_root.xpath(s) for s in xpaths]):
       e_pos = xml_pos_by_node.get(e)
       if children_pattern:
         text_content_list = parse_children(

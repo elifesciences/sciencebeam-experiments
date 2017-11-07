@@ -26,6 +26,7 @@ TAG1 = 'tag1'
 TAG2 = 'tag2'
 
 SOME_VALUE = 'some value'
+SOME_VALUE_2 = 'some value2'
 SOME_LONGER_VALUE = 'some longer value1'
 SOME_SHORTER_VALUE = 'value1'
 
@@ -146,6 +147,27 @@ class TestXmlRootToTargetAnnotations(object):
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
     assert [t.bonding for t in target_annotations] == [False]
+
+  def test_should_use_multiple_xpaths(self):
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_VALUE),
+        E.child2(SOME_VALUE_2)
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: '\n{}\n{}\n'.format(
+          'entry/child1',
+          'entry/child2'
+        )
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, SOME_VALUE),
+      (TAG1, SOME_VALUE_2)
+    ]
 
   def test_should_apply_children_xpaths_and_sort_by_value_descending(self):
     xml_root = E.article(
