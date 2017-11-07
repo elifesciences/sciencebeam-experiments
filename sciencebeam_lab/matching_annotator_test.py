@@ -24,6 +24,8 @@ TAG1 = 'tag1'
 TAG2 = 'tag2'
 
 SOME_VALUE = 'some value'
+SOME_LONGER_VALUE = 'some longer value1'
+SOME_SHORTER_VALUE = 'value1'
 
 def _get_tags_of_tokens(tokens):
   return [t.get_tag() for t in tokens]
@@ -99,6 +101,48 @@ class TestXmlRootToTargetAnnotations(object):
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
     assert [t.match_multiple for t in target_annotations] == [True]
+
+  def test_should_apply_children_xpaths_and_sort_by_value_descending(self):
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_SHORTER_VALUE),
+        E.child2(SOME_LONGER_VALUE)
+      ),
+      E.entry(
+        E.child1(SOME_LONGER_VALUE)
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMapping.CHILDREN: '*'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [SOME_LONGER_VALUE, SOME_SHORTER_VALUE]),
+      (TAG1, SOME_LONGER_VALUE)
+    ]
+
+  def test_should_apply_children_xpaths_and_exclude_parents(self):
+    xml_root = E.article(
+      E.entry(
+        E.parent(
+          E.child2(SOME_LONGER_VALUE),
+          E.child1(SOME_SHORTER_VALUE)
+        )
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMapping.CHILDREN: './/*'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [SOME_LONGER_VALUE, SOME_SHORTER_VALUE])
+    ]
 
   def test_should_not_apply_match_multiple_flag_if_not_set(self):
     xml_root = E.article(

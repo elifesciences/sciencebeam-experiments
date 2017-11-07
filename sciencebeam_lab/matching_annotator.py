@@ -17,7 +17,8 @@ from sciencebeam_lab.alignment.WordSequenceMatcher import (
 )
 
 from sciencebeam_lab.collection_utils import (
-  filter_non_empty,
+  filter_truthy,
+  strip_all,
   iter_flatten
 )
 
@@ -58,6 +59,7 @@ def normalise_str_or_list(x):
 class XmlMapping(object):
   REGEX_SUFFIX = '.regex'
   MATCH_MULTIPLE = '.match-multiple'
+  CHILDREN = '.children'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -400,6 +402,23 @@ def parse_xml_mapping(xml_mapping_filename):
     config.read_file(f)
     return config
 
+def apply_pattern(s, compiled_pattern):
+  m = compiled_pattern.match(s)
+  if m:
+    get_logger().debug('regex match: %s -> %s', compiled_pattern, m.groups())
+    return m.group(1)
+  return s
+
+def iter_parents(children):
+  for child in children:
+    p = child.getparent()
+    if p:
+      yield p
+
+def exclude_parents(children):
+  all_parents = set(iter_parents(children))
+  return [child for child in children if not child in all_parents]
+
 def xml_root_to_target_annotations(xml_root, xml_mapping):
   if not xml_root.tag in xml_mapping:
     raise Exception("unrecognised tag: {} (available: {})".format(
@@ -435,7 +454,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     'front/article-meta/contrib-group/contrib/aff',
     'front/article-meta/aff'
   ]
-  author_aff = filter_non_empty([
+  author_aff = filter_truthy([
     sorted([
       s.strip()
       for s in get_text_content_list(
@@ -450,21 +469,30 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
     match_multiple = get_match_multiple(k)
+    children_pattern = mapping.get(k + XmlMapping.CHILDREN)
     re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
+
     for e in xml_root.xpath(mapping[k]):
       e_pos = xml_pos_by_node.get(e)
-      text_content = (get_text_content(
-        e
-      ) or '').strip()
-      if text_content:
-        if re_compiled_pattern:
-          m = re_compiled_pattern.match(text_content)
-          if m:
-            get_logger().debug('regex match: %s: %s -> %s', k, re_pattern, m.groups())
-            text_content = m.group(1)
+      if children_pattern:
+        text_content_list = filter_truthy(strip_all(
+          get_text_content_list(exclude_parents(e.xpath(children_pattern)))
+        ))
+      else:
+        text_content_list = filter_truthy(strip_all([get_text_content(e)]))
+      if re_compiled_pattern:
+        text_content_list = filter_truthy([
+          apply_pattern(s, re_compiled_pattern) for s in text_content_list
+        ])
+      if text_content_list:
+        value = (
+          text_content_list[0]
+          if len(text_content_list) == 1
+          else sorted(text_content_list, key=lambda s: -len(s))
+        )
         target_annotations_with_pos.append(
-          (e_pos, TargetAnnotation(text_content, k, match_multiple=match_multiple))
+          (e_pos, TargetAnnotation(value, k, match_multiple=match_multiple))
         )
   target_annotations_with_pos = sorted(
     target_annotations_with_pos,
