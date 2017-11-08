@@ -454,7 +454,7 @@ def apply_pattern(s, compiled_pattern):
 def iter_parents(children):
   for child in children:
     p = child.getparent()
-    if p:
+    if p is not None:
       yield p
 
 def exclude_parents(children):
