@@ -15,7 +15,7 @@ from sciencebeam_lab.matching_annotator import (
   THIN_SPACE,
   EN_DASH,
   EM_DASH,
-  XmlMapping
+  XmlMappingSuffix
 )
 
 from sciencebeam_lab.collection_utils import (
@@ -90,7 +90,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'title',
-        TAG1 + XmlMapping.REGEX_SUFFIX: r'(?:\d+\.?)* ?(.*)'
+        TAG1 + XmlMappingSuffix.REGEX: r'(?:\d+\.?)* ?(.*)'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -105,7 +105,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'title',
-        TAG1 + XmlMapping.MATCH_MULTIPLE: 'true'
+        TAG1 + XmlMappingSuffix.MATCH_MULTIPLE: 'true'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -130,7 +130,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'title',
-        TAG1 + XmlMapping.BONDING: 'true'
+        TAG1 + XmlMappingSuffix.BONDING: 'true'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -182,7 +182,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: './/*'
+        TAG1 + XmlMappingSuffix.CHILDREN: './/*'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -203,7 +203,7 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: './/*'
+        TAG1 + XmlMappingSuffix.CHILDREN: './/*'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -221,8 +221,8 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: '\n{}\n{}\n'.format('.//*', '.'),
-        TAG1 + XmlMapping.UNMATCHED_PARENT_TEXT: 'true'
+        TAG1 + XmlMappingSuffix.CHILDREN: '\n{}\n{}\n'.format('.//*', '.'),
+        TAG1 + XmlMappingSuffix.UNMATCHED_PARENT_TEXT: 'true'
       }
     }
     target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
@@ -244,8 +244,8 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: './/*',
-        TAG1 + XmlMapping.CHILDREN_CONCAT: json.dumps([[{
+        TAG1 + XmlMappingSuffix.CHILDREN: './/*',
+        TAG1 + XmlMappingSuffix.CHILDREN_CONCAT: json.dumps([[{
           'xpath': './/fpage'
         }, {
           'value': '-'
@@ -273,8 +273,8 @@ class TestXmlRootToTargetAnnotations(object):
     xml_mapping = {
       'article': {
         TAG1: 'entry',
-        TAG1 + XmlMapping.CHILDREN: './/*',
-        TAG1 + XmlMapping.CHILDREN_CONCAT: json.dumps([[{
+        TAG1 + XmlMappingSuffix.CHILDREN: './/*',
+        TAG1 + XmlMappingSuffix.CHILDREN_CONCAT: json.dumps([[{
           'xpath': './/fpage'
         }, {
           'value': '-'

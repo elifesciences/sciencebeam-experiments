@@ -59,8 +59,8 @@ def normalise_str_or_list(x):
   else:
     return normalise_str(x)
 
-class XmlMapping(object):
-  REGEX_SUFFIX = '.regex'
+class XmlMappingSuffix(object):
+  REGEX = '.regex'
   MATCH_MULTIPLE = '.match-multiple'
   BONDING = '.bonding'
   CHILDREN = '.children'
@@ -530,9 +530,9 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
 
   field_names = [k for k in mapping.keys() if '.' not in k]
   get_mapping_flag = lambda k, suffix: mapping.get(k + suffix) == 'true'
-  get_match_multiple = lambda k: get_mapping_flag(k, XmlMapping.MATCH_MULTIPLE)
-  get_bonding_flag = lambda k: get_mapping_flag(k, XmlMapping.BONDING)
-  get_unmatched_parent_text_flag = lambda k: get_mapping_flag(k, XmlMapping.UNMATCHED_PARENT_TEXT)
+  get_match_multiple = lambda k: get_mapping_flag(k, XmlMappingSuffix.MATCH_MULTIPLE)
+  get_bonding_flag = lambda k: get_mapping_flag(k, XmlMappingSuffix.BONDING)
+  get_unmatched_parent_text_flag = lambda k: get_mapping_flag(k, XmlMappingSuffix.UNMATCHED_PARENT_TEXT)
 
   get_logger().debug('fields: %s', field_names)
 
@@ -549,10 +549,10 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     match_multiple = get_match_multiple(k)
     bonding = get_bonding_flag(k)
     unmatched_parent_text = get_unmatched_parent_text_flag(k)
-    children_xpaths = parse_xpaths(mapping.get(k + XmlMapping.CHILDREN))
-    children_concat_str = mapping.get(k + XmlMapping.CHILDREN_CONCAT)
+    children_xpaths = parse_xpaths(mapping.get(k + XmlMappingSuffix.CHILDREN))
+    children_concat_str = mapping.get(k + XmlMappingSuffix.CHILDREN_CONCAT)
     children_concat = json.loads(children_concat_str) if children_concat_str else []
-    re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
+    re_pattern = mapping.get(k + XmlMappingSuffix.REGEX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
 
     xpaths = parse_xpaths(mapping[k])
