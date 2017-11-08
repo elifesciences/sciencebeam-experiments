@@ -27,7 +27,8 @@ from sciencebeam_lab.collection_utils import (
 
 from sciencebeam_lab.xml_utils import (
   get_text_content,
-  get_text_content_list
+  get_text_content_list,
+  get_immediate_text
 )
 
 from sciencebeam_lab.annotator import (
@@ -473,7 +474,7 @@ def extract_children_source_list(parent, children_source_list):
   for children_source in children_source_list:
     xpath = children_source.get('xpath')
     if xpath:
-      matching_nodes = parent.xpath(xpath)
+      matching_nodes = exclude_parents(parent.xpath(xpath))
       if not matching_nodes:
         get_logger().debug(
           'child xpath does not match any item, skipping: xpath=%s (xml=%s)',
@@ -483,7 +484,7 @@ def extract_children_source_list(parent, children_source_list):
         used_nodes = set()
         values = []
         break
-      used_nodes |= set(exclude_parents(matching_nodes))
+      used_nodes |= set(matching_nodes)
       value = ' '.join(get_text_content_list(matching_nodes))
     else:
       value = children_source.get('value')
@@ -532,7 +533,7 @@ def parse_xpaths(s):
 def match_xpaths(parent, xpaths):
   return chain(*[parent.xpath(s) for s in xpaths])
 
-def parse_children(
+def extract_children(
   parent, children_xpaths, children_concat, children_range, unmatched_parent_text):
 
   concat_values_list, concat_used_nodes = extract_children_concat(parent, children_concat)
@@ -541,19 +542,27 @@ def parse_children(
   )
   used_nodes = concat_used_nodes | range_used_nodes
 
-  other_child_nodes = exclude_parents(
+  other_child_nodes = [
     node for node in match_xpaths(parent, children_xpaths)
     if not node in used_nodes
-  )
+  ]
+  other_child_nodes_excl_parents = exclude_parents(other_child_nodes)
   text_content_list = filter_truthy(strip_all(
-    get_text_content_list(other_child_nodes) + concat_values_list + range_values_list
+    get_text_content_list(other_child_nodes_excl_parents) +
+    concat_values_list + range_values_list
   ))
+  if len(other_child_nodes_excl_parents) != len(other_child_nodes):
+    other_child_nodes_excl_parents_set = set(other_child_nodes_excl_parents)
+    for child in other_child_nodes:
+      if child not in other_child_nodes_excl_parents_set:
+        text_values = filter_truthy(strip_all(get_immediate_text(child)))
+        text_content_list.extend(text_values)
   if unmatched_parent_text:
     value = get_text_content(
       parent,
       exclude=set(other_child_nodes) | used_nodes
     ).strip()
-    if value:
+    if value and not value in text_content_list:
       text_content_list.append(value)
   return text_content_list, standalone_values
 
@@ -599,7 +608,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     for e in match_xpaths(xml_root, xpaths):
       e_pos = xml_pos_by_node.get(e)
       if children_xpaths:
-        text_content_list, standalone_values = parse_children(
+        text_content_list, standalone_values = extract_children(
           e, children_xpaths, children_concat, children_range, unmatched_parent_text
         )
       else:

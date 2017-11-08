@@ -211,6 +211,27 @@ class TestXmlRootToTargetAnnotations(object):
       (TAG1, [SOME_LONGER_VALUE, SOME_SHORTER_VALUE])
     ]
 
+  def test_should_apply_children_xpaths_and_include_parent_text_between_matched_children(self):
+    xml_root = E.article(
+      E.entry(
+        E.parent(
+          E.child2(SOME_LONGER_VALUE),
+          SOME_VALUE,
+          E.child1(SOME_SHORTER_VALUE)
+        )
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMappingSuffix.CHILDREN: './/*'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [SOME_LONGER_VALUE, SOME_VALUE, SOME_SHORTER_VALUE])
+    ]
+
   def test_should_apply_multiple_children_xpaths_and_include_parent_text_if_enabled(self):
     xml_root = E.article(
       E.entry(

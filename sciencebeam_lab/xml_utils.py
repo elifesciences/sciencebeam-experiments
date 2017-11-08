@@ -22,5 +22,8 @@ def get_text_content(node, exclude=None):
     return ''.join(node.itertext())
   return _get_text_content_and_exclude(node, exclude)
 
+def get_immediate_text(node):
+  return node.xpath('text()')
+
 def get_text_content_list(nodes, exclude=None):
   return [get_text_content(node, exclude=exclude) for node in nodes]

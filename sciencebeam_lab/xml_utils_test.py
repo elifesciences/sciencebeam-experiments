@@ -1,7 +1,8 @@
 from lxml.builder import E
 
 from sciencebeam_lab.xml_utils import (
-  get_text_content
+  get_text_content,
+  get_immediate_text
 )
 
 SOME_VALUE_1 = 'some value1'
@@ -28,3 +29,12 @@ class TestGetTextContent(object):
     child = E.child(SOME_VALUE_1)
     node = E.parent(child, SOME_VALUE_2)
     assert get_text_content(node, exclude=[child]) == SOME_VALUE_2
+
+class TestGetImmediateText(object):
+  def test_should_return_simple_text(self):
+    node = E.parent(SOME_VALUE_1)
+    assert get_immediate_text(node) == [SOME_VALUE_1]
+
+  def test_should_not_return_text_of_child_element(self):
+    node = E.parent(E.child(SOME_VALUE_1))
+    assert get_immediate_text(node) == []
