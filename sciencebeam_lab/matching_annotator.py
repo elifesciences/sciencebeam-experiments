@@ -532,7 +532,9 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   get_mapping_flag = lambda k, suffix: mapping.get(k + suffix) == 'true'
   get_match_multiple = lambda k: get_mapping_flag(k, XmlMappingSuffix.MATCH_MULTIPLE)
   get_bonding_flag = lambda k: get_mapping_flag(k, XmlMappingSuffix.BONDING)
-  get_unmatched_parent_text_flag = lambda k: get_mapping_flag(k, XmlMappingSuffix.UNMATCHED_PARENT_TEXT)
+  get_unmatched_parent_text_flag = (
+    lambda k: get_mapping_flag(k, XmlMappingSuffix.UNMATCHED_PARENT_TEXT)
+  )
 
   get_logger().debug('fields: %s', field_names)
 
