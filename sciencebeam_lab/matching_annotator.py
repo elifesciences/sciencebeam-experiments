@@ -9,6 +9,8 @@ from itertools import tee, chain
 
 from future.utils import python_2_unicode_compatible
 
+from lxml import etree
+
 from sciencebeam_lab.alignment.align import (
   LocalSequenceMatcher,
   SimpleScoring
@@ -475,7 +477,11 @@ def parse_children_concat(parent, children_concat):
       if xpath:
         matching_nodes = parent.xpath(xpath)
         if not matching_nodes:
-          get_logger().info('no item found for, skipping concat: %s', xpath)
+          get_logger().debug(
+            'no concat child xpath does not match any item, skipping concat: xpath=%s (xml=%s)',
+            xpath,
+            LazyStr(lambda: str(etree.tostring(parent)))
+          )
           temp_used_nodes = set()
           temp_concat_values = []
           break
