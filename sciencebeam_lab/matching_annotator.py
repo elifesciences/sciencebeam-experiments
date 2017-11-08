@@ -516,11 +516,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
 
   first_page = get_text_content_list(xml_root.xpath('front/article-meta/fpage'))
   last_page = get_text_content_list(xml_root.xpath('front/article-meta/lpage'))
-  keywords = get_text_content_list(
-    xml_root.xpath('front/article-meta/kwd-group/kwd[@kwd-group-type="author-keywords"]')
-  )
-  if keywords:
-    keywords = [' '.join(keywords)]
   if len(first_page) == 1 and len(last_page) == 1:
     pages = [str(p) for p in range(int(first_page[0]), int(last_page[0]) + 1)]
   else:
@@ -578,7 +573,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   )
   target_annotations = (
     target_annotations +
-    [create_builtin_target_annotation(s, 'keywords') for s in keywords] +
     [create_builtin_target_annotation(s, 'page_no') for s in pages]
   )
   get_logger().debug('target_annotations:\n%s', '\n'.join([
