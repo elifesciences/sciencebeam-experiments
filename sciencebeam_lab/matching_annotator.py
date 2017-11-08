@@ -65,6 +65,7 @@ class XmlMapping(object):
   BONDING = '.bonding'
   CHILDREN = '.children'
   CHILDREN_CONCAT = '.children.concat'
+  UNMATCHED_PARENT_TEXT = '.unmatched-parent-text'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -485,8 +486,8 @@ def parse_children_concat(parent, children_concat):
           temp_used_nodes = set()
           temp_concat_values = []
           break
-        temp_used_nodes |= set(matching_nodes)
-        value = ' '.join(get_text_content_list(exclude_parents(matching_nodes)))
+        temp_used_nodes |= set(exclude_parents(matching_nodes))
+        value = ' '.join(get_text_content_list(matching_nodes))
       else:
         value = children_concat_source.get('value')
       temp_concat_values.append(value or '')
@@ -495,13 +496,27 @@ def parse_children_concat(parent, children_concat):
       concat_values_list.append(''.join(temp_concat_values))
   return concat_values_list, used_nodes
 
-def parse_children(parent, children_pattern, children_concat):
+def parse_xpaths(s):
+  return strip_all(s.strip().split('\n')) if s else None
+
+def match_xpaths(parent, xpaths):
+  return chain(*[parent.xpath(s) for s in xpaths])
+
+def parse_children(parent, children_xpaths, children_concat, unmatched_parent_text):
   concat_values_list, used_nodes = parse_children_concat(parent, children_concat)
+  other_child_nodes = exclude_parents(
+    node for node in match_xpaths(parent, children_xpaths) if not node in used_nodes
+  )
   text_content_list = filter_truthy(strip_all(
-    get_text_content_list(exclude_parents(
-      node for node in parent.xpath(children_pattern) if not node in used_nodes
-    )) + concat_values_list
+    get_text_content_list(other_child_nodes) + concat_values_list
   ))
+  if unmatched_parent_text:
+    value = get_text_content(
+      parent,
+      exclude=set(other_child_nodes) | used_nodes
+    ).strip()
+    if value:
+      text_content_list.append(value)
   return text_content_list
 
 
@@ -517,6 +532,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   get_mapping_flag = lambda k, suffix: mapping.get(k + suffix) == 'true'
   get_match_multiple = lambda k: get_mapping_flag(k, XmlMapping.MATCH_MULTIPLE)
   get_bonding_flag = lambda k: get_mapping_flag(k, XmlMapping.BONDING)
+  get_unmatched_parent_text_flag = lambda k: get_mapping_flag(k, XmlMapping.UNMATCHED_PARENT_TEXT)
 
   get_logger().debug('fields: %s', field_names)
 
@@ -532,19 +548,20 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   for k in field_names:
     match_multiple = get_match_multiple(k)
     bonding = get_bonding_flag(k)
-    children_pattern = mapping.get(k + XmlMapping.CHILDREN)
+    unmatched_parent_text = get_unmatched_parent_text_flag(k)
+    children_xpaths = parse_xpaths(mapping.get(k + XmlMapping.CHILDREN))
     children_concat_str = mapping.get(k + XmlMapping.CHILDREN_CONCAT)
     children_concat = json.loads(children_concat_str) if children_concat_str else []
     re_pattern = mapping.get(k + XmlMapping.REGEX_SUFFIX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
 
-    xpaths = strip_all(mapping[k].strip().split('\n'))
+    xpaths = parse_xpaths(mapping[k])
     get_logger().debug('xpaths(%s): %s', k, xpaths)
-    for e in chain(*[xml_root.xpath(s) for s in xpaths]):
+    for e in match_xpaths(xml_root, xpaths):
       e_pos = xml_pos_by_node.get(e)
-      if children_pattern:
+      if children_xpaths:
         text_content_list = parse_children(
-          e, children_pattern, children_concat
+          e, children_xpaths, children_concat, unmatched_parent_text
         )
       else:
         text_content_list = filter_truthy(strip_all([get_text_content(e)]))
