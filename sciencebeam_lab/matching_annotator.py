@@ -65,6 +65,7 @@ class XmlMappingSuffix(object):
   BONDING = '.bonding'
   CHILDREN = '.children'
   CHILDREN_CONCAT = '.children.concat'
+  CHILDREN_RANGE = '.children.range'
   UNMATCHED_PARENT_TEXT = '.unmatched-parent-text'
 
 @python_2_unicode_compatible
@@ -466,35 +467,64 @@ def exclude_parents(children):
   all_parents = set(iter_parents(children))
   return [child for child in children if not child in all_parents]
 
-def parse_children_concat(parent, children_concat):
+def extract_children_source_list(parent, children_source_list):
   used_nodes = set()
-  concat_values_list = []
+  values = []
+  for children_source in children_source_list:
+    xpath = children_source.get('xpath')
+    if xpath:
+      matching_nodes = parent.xpath(xpath)
+      if not matching_nodes:
+        get_logger().debug(
+          'child xpath does not match any item, skipping: xpath=%s (xml=%s)',
+          xpath,
+          LazyStr(lambda: str(etree.tostring(parent)))
+        )
+        used_nodes = set()
+        values = []
+        break
+      used_nodes |= set(exclude_parents(matching_nodes))
+      value = ' '.join(get_text_content_list(matching_nodes))
+    else:
+      value = children_source.get('value')
+    values.append(value or '')
+  return values, used_nodes
+
+def extract_children_concat(parent, children_concat):
+  used_nodes = set()
+  values = []
   get_logger().debug('children_concat: %s', children_concat)
   for children_concat_item in children_concat:
-    temp_used_nodes = set()
-    temp_concat_values = []
-    for children_concat_source in children_concat_item:
-      xpath = children_concat_source.get('xpath')
-      if xpath:
-        matching_nodes = parent.xpath(xpath)
-        if not matching_nodes:
-          get_logger().debug(
-            'no concat child xpath does not match any item, skipping concat: xpath=%s (xml=%s)',
-            xpath,
-            LazyStr(lambda: str(etree.tostring(parent)))
-          )
-          temp_used_nodes = set()
-          temp_concat_values = []
-          break
-        temp_used_nodes |= set(exclude_parents(matching_nodes))
-        value = ' '.join(get_text_content_list(matching_nodes))
-      else:
-        value = children_concat_source.get('value')
-      temp_concat_values.append(value or '')
+    temp_values, temp_used_nodes = extract_children_source_list(
+      parent, children_concat_item
+    )
     used_nodes |= temp_used_nodes
-    if temp_concat_values:
-      concat_values_list.append(''.join(temp_concat_values))
-  return concat_values_list, used_nodes
+    if temp_values:
+      values.append(''.join(temp_values))
+  return values, used_nodes
+
+def extract_children_range(parent, children_range):
+  used_nodes = set()
+  values = []
+  standalone_values = []
+  get_logger().debug('children_range: %s', children_range)
+  for range_item in children_range:
+    temp_values, temp_used_nodes = extract_children_source_list(
+      parent, [range_item.get('min'), range_item.get('max')]
+    )
+    if len(temp_values) == 2:
+      temp_values = strip_all(temp_values)
+      if all(s.isdigit() for s in temp_values):
+        num_values = [int(s) for s in temp_values]
+        range_values = [str(x) for x in range(num_values[0], num_values[1] + 1)]
+        if range_item.get('standalone'):
+          standalone_values.extend(range_values)
+        else:
+          values.extend(range_values)
+        used_nodes |= temp_used_nodes
+      else:
+        get_logger().info('values not integers: %s', temp_values)
+  return values, standalone_values, used_nodes
 
 def parse_xpaths(s):
   return strip_all(s.strip().split('\n')) if s else None
@@ -502,13 +532,21 @@ def parse_xpaths(s):
 def match_xpaths(parent, xpaths):
   return chain(*[parent.xpath(s) for s in xpaths])
 
-def parse_children(parent, children_xpaths, children_concat, unmatched_parent_text):
-  concat_values_list, used_nodes = parse_children_concat(parent, children_concat)
+def parse_children(
+  parent, children_xpaths, children_concat, children_range, unmatched_parent_text):
+
+  concat_values_list, concat_used_nodes = extract_children_concat(parent, children_concat)
+  range_values_list, standalone_values, range_used_nodes = (
+    extract_children_range(parent, children_range)
+  )
+  used_nodes = concat_used_nodes | range_used_nodes
+
   other_child_nodes = exclude_parents(
-    node for node in match_xpaths(parent, children_xpaths) if not node in used_nodes
+    node for node in match_xpaths(parent, children_xpaths)
+    if not node in used_nodes
   )
   text_content_list = filter_truthy(strip_all(
-    get_text_content_list(other_child_nodes) + concat_values_list
+    get_text_content_list(other_child_nodes) + concat_values_list + range_values_list
   ))
   if unmatched_parent_text:
     value = get_text_content(
@@ -517,8 +555,10 @@ def parse_children(parent, children_xpaths, children_concat, unmatched_parent_te
     ).strip()
     if value:
       text_content_list.append(value)
-  return text_content_list
+  return text_content_list, standalone_values
 
+def parse_json_with_default(s, default_value):
+  return json.loads(s) if s else default_value
 
 def xml_root_to_target_annotations(xml_root, xml_mapping):
   if not xml_root.tag in xml_mapping:
@@ -538,13 +578,6 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
 
   get_logger().debug('fields: %s', field_names)
 
-  first_page = get_text_content_list(xml_root.xpath('front/article-meta/fpage'))
-  last_page = get_text_content_list(xml_root.xpath('front/article-meta/lpage'))
-  if len(first_page) == 1 and len(last_page) == 1:
-    pages = [str(p) for p in range(int(first_page[0]), int(last_page[0]) + 1)]
-  else:
-    pages = []
-  target_annotations = []
   target_annotations_with_pos = []
   xml_pos_by_node = {node: i for i, node in enumerate(xml_root.iter())}
   for k in field_names:
@@ -552,8 +585,12 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     bonding = get_bonding_flag(k)
     unmatched_parent_text = get_unmatched_parent_text_flag(k)
     children_xpaths = parse_xpaths(mapping.get(k + XmlMappingSuffix.CHILDREN))
-    children_concat_str = mapping.get(k + XmlMappingSuffix.CHILDREN_CONCAT)
-    children_concat = json.loads(children_concat_str) if children_concat_str else []
+    children_concat = parse_json_with_default(
+      mapping.get(k + XmlMappingSuffix.CHILDREN_CONCAT), []
+    )
+    children_range = parse_json_with_default(
+      mapping.get(k + XmlMappingSuffix.CHILDREN_RANGE), []
+    )
     re_pattern = mapping.get(k + XmlMappingSuffix.REGEX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
 
@@ -562,11 +599,12 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     for e in match_xpaths(xml_root, xpaths):
       e_pos = xml_pos_by_node.get(e)
       if children_xpaths:
-        text_content_list = parse_children(
-          e, children_xpaths, children_concat, unmatched_parent_text
+        text_content_list, standalone_values = parse_children(
+          e, children_xpaths, children_concat, children_range, unmatched_parent_text
         )
       else:
         text_content_list = filter_truthy(strip_all([get_text_content(e)]))
+        standalone_values = []
       if re_compiled_pattern:
         text_content_list = filter_truthy([
           apply_pattern(s, re_compiled_pattern) for s in text_content_list
@@ -586,20 +624,24 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
             bonding=bonding
           )
         ))
+      if standalone_values:
+        for standalone_value in standalone_values:
+          target_annotations_with_pos.append((
+            e_pos,
+            TargetAnnotation(
+              standalone_value,
+              k,
+              match_multiple=match_multiple,
+              bonding=bonding
+            )
+          ))
   target_annotations_with_pos = sorted(
     target_annotations_with_pos,
     key=lambda x: x[0]
   )
-  target_annotations.extend(
+  target_annotations = [
     x[1] for x in target_annotations_with_pos
-  )
-  create_builtin_target_annotation = lambda s, k: TargetAnnotation(
-    s, k, match_multiple=get_match_multiple(k)
-  )
-  target_annotations = (
-    target_annotations +
-    [create_builtin_target_annotation(s, 'page_no') for s in pages]
-  )
+  ]
   get_logger().debug('target_annotations:\n%s', '\n'.join([
     ' ' + str(a) for a in target_annotations
   ]))

@@ -288,6 +288,123 @@ class TestXmlRootToTargetAnnotations(object):
       (TAG1, [SOME_VALUE, num_values[0], num_values[1]])
     ]
 
+  def test_should_apply_range_children(self):
+    num_values = [101, 102, 103, 104, 105, 106, 107]
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_VALUE),
+        E.fpage(str(min(num_values))),
+        E.lpage(str(max(num_values)))
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMappingSuffix.CHILDREN: 'fpage|lpage',
+        TAG1 + XmlMappingSuffix.CHILDREN_RANGE: json.dumps([{
+          'min': {
+            'xpath': 'fpage'
+          },
+          'max': {
+            'xpath': 'lpage'
+          }
+        }])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [str(x) for x in num_values])
+    ]
+
+  def test_should_apply_range_children_as_separate_target_annotations(self):
+    num_values = [101, 102, 103, 104, 105, 106, 107]
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_VALUE),
+        E.fpage(str(min(num_values))),
+        E.lpage(str(max(num_values)))
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMappingSuffix.CHILDREN: 'fpage|lpage',
+        TAG1 + XmlMappingSuffix.CHILDREN_RANGE: json.dumps([{
+          'min': {
+            'xpath': 'fpage'
+          },
+          'max': {
+            'xpath': 'lpage'
+          },
+          'standalone': True
+        }])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, str(x))
+      for x in num_values
+    ]
+
+  def test_should_not_apply_range_children_if_xpath_not_matching(self):
+    num_values = [101, 102, 103, 104, 105, 106, 107]
+    fpage = str(min(num_values))
+    lpage = str(max(num_values))
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_VALUE),
+        E.fpage(fpage),
+        E.lpage(lpage)
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMappingSuffix.CHILDREN: 'fpage|unknown',
+        TAG1 + XmlMappingSuffix.CHILDREN_RANGE: json.dumps([{
+          'min': {
+            'xpath': 'fpage'
+          },
+          'max': {
+            'xpath': 'unknown'
+          }
+        }])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, fpage)
+    ]
+
+  def test_should_not_apply_range_children_if_value_is_not_integer(self):
+    fpage = 'abc'
+    lpage = 'xyz'
+    xml_root = E.article(
+      E.entry(
+        E.child1(SOME_VALUE),
+        E.fpage(fpage),
+        E.lpage(lpage)
+      )
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'entry',
+        TAG1 + XmlMappingSuffix.CHILDREN: 'fpage|lpage',
+        TAG1 + XmlMappingSuffix.CHILDREN_RANGE: json.dumps([{
+          'min': {
+            'xpath': 'fpage'
+          },
+          'max': {
+            'xpath': 'lpage'
+          }
+        }])
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(t.name, t.value) for t in target_annotations] == [
+      (TAG1, [fpage, lpage])
+    ]
+
   def test_should_return_full_text(self):
     xml_root = E.article(
       E.title(
