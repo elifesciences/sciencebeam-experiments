@@ -5,7 +5,7 @@ import re
 import json
 from configparser import ConfigParser
 from builtins import str as text
-from itertools import tee, chain
+from itertools import tee, chain, zip_longest, islice
 
 from future.utils import python_2_unicode_compatible
 
@@ -125,6 +125,9 @@ class SequenceWrapper(object):
   def __str__(self):
     return self.tokens_as_str
 
+  def __repr__(self):
+    return '{}({})'.format('SequenceWrapper', self.tokens_as_str)
+
 class SequenceWrapperWithPosition(SequenceWrapper):
   def __init__(self, *args, position=None, **kwargs):
     super(SequenceWrapperWithPosition, self).__init__(*args, **kwargs)
@@ -136,6 +139,9 @@ class SequenceWrapperWithPosition(SequenceWrapper):
       str_filter_f=self.str_filter_f,
       position=self.position
     )
+
+  def __repr__(self):
+    return '{}({}, {})'.format('SequenceWrapperWithPosition', self.tokens_as_str, self.position)
 
 @python_2_unicode_compatible
 class SequenceMatch(object):
@@ -179,6 +185,9 @@ class FuzzyMatchResult(object):
     self._a_index_range = None
     self._b_index_range = None
     self.isjunk = DEFAULT_ISJUNK
+
+  def has_match(self):
+    return len(self.non_empty_matching_blocks) > 0
 
   def match_count(self):
     if self._match_count is None:
@@ -240,26 +249,84 @@ class FuzzyMatchResult(object):
   def b_matching_blocks(self):
     return ((b, size) for _, b, size in self.non_empty_matching_blocks)
 
-  def index_range_for_matching_blocks(self, seq_matching_blocks):
-    list_1, list_2 = tee(seq_matching_blocks)
-    return (
-      min(i for i, size in list_1),
-      max(i + size for i, size in list_2)
-    )
+  def a_start_index(self):
+    return self.non_empty_matching_blocks[0][0] if self.has_match() else None
+
+  def a_end_index(self):
+    if not self.has_match():
+      return None
+    ai, _, size = self.non_empty_matching_blocks[-1]
+    return ai + size
 
   def a_index_range(self):
     if not self.non_empty_matching_blocks:
       return (0, 0)
     if not self._a_index_range:
-      self._a_index_range = self.index_range_for_matching_blocks(self.a_matching_blocks())
+      self._a_index_range = (self.a_start_index(), self.a_end_index())
     return self._a_index_range
+
+  def b_start_index(self):
+    return self.non_empty_matching_blocks[0][1] if self.has_match() else None
+
+  def b_end_index(self):
+    if not self.has_match():
+      return None
+    _, bi, size = self.non_empty_matching_blocks[-1]
+    return bi + size
 
   def b_index_range(self):
     if not self.non_empty_matching_blocks:
       return (0, 0)
     if not self._b_index_range:
-      self._b_index_range = self.index_range_for_matching_blocks(self.b_matching_blocks())
+      self._b_index_range = (self.b_start_index(), self.b_end_index())
     return self._b_index_range
+
+  def a_split_at(self, index, a_pre_split=None, a_post_split=None):
+    if a_pre_split is None:
+      a_pre_split = self.a[:index]
+    if a_post_split is None:
+      a_post_split = self.a[index:]
+    if not self.non_empty_matching_blocks or self.a_end_index() <= index:
+      return (
+        FuzzyMatchResult(a_pre_split, self.b, self.non_empty_matching_blocks),
+        FuzzyMatchResult(a_post_split, self.b, [])
+      )
+    return (
+      FuzzyMatchResult(a_pre_split, self.b, [
+        (ai, bi, min(size, index - ai))
+        for ai, bi, size in self.non_empty_matching_blocks
+        if ai < index
+      ]),
+      FuzzyMatchResult(a_post_split, self.b, [
+        (max(0, ai - index), bi, size if ai >= index else size + ai - index)
+        for ai, bi, size in self.non_empty_matching_blocks
+        if ai + size > index
+      ])
+    )
+
+  def b_split_at(self, index, b_pre_split=None, b_post_split=None):
+    if b_pre_split is None:
+      b_pre_split = self.b[:index]
+    if b_post_split is None:
+      b_post_split = self.b[index:]
+    if not self.non_empty_matching_blocks or self.b_end_index() <= index:
+      return (
+        FuzzyMatchResult(self.a, b_pre_split, self.non_empty_matching_blocks),
+        FuzzyMatchResult(self.a, b_post_split, [])
+      )
+    result = (
+      FuzzyMatchResult(self.a, b_pre_split, [
+        (ai, bi, min(size, index - bi))
+        for ai, bi, size in self.non_empty_matching_blocks
+        if bi < index
+      ]),
+      FuzzyMatchResult(self.a, b_post_split, [
+        (ai, max(0, bi - index), size if bi >= index else size + bi - index)
+        for ai, bi, size in self.non_empty_matching_blocks
+        if bi + size > index
+      ])
+    )
+    return result
 
   def detailed_str(self):
     return 'matching_blocks=[%s]' % (
@@ -382,31 +449,61 @@ def find_best_matches(
   start_index = 0
   s1 = text(sequence)
   too_distant_choices = []
-  for choice in choices:
-    choice_str = text(choice)
-    if not choice_str:
-      return
+
+  current_choices, next_choices = tee(choices, 2)
+  next_choices = islice(next_choices, 1, None)
+  for choice, next_choice in zip_longest(current_choices, next_choices):
     if not matched_choices.is_close_to_any(choice, max_gap=max_gap):
       too_distant_choices.append(choice)
       continue
-    if len(s1) - start_index >= len(choice_str):
-      m = fuzzy_match(s1, choice_str)
-      get_logger().debug('choice: s1=%s, choice=%s, m=%s', s1, choice, m)
-      get_logger().debug('detailed match: %s', m.detailed())
-      if seq_match_filter(m):
-        index1_range = m.a_index_range()
-        index2_range = m.b_index_range()
-        index1_end = index1_range[1]
-        m = SequenceMatch(
+    current_choice_str = text(choice)
+    if not current_choice_str:
+      return
+    if next_choice:
+      next_choice_str = text(next_choice)
+      choice_str = current_choice_str + ' ' + next_choice_str
+    else:
+      choice_str = current_choice_str
+      next_choice_str = None
+    get_logger().debug(
+      'processing choice: tag=%s, s1=%s, current=%s, next=%s (%s), combined=%s',
+      target_annotation.name, s1, current_choice_str,
+      next_choice_str, type(next_choice_str), choice_str
+    )
+    if len(s1) - start_index >= len(current_choice_str):
+      fm_combined = fuzzy_match(s1, choice_str)
+      fm, fm_next = fm_combined.b_split_at(len(current_choice_str))
+      get_logger().debug(
+        'regular match: s1=%s, choice=%s, fm=%s (combined: %s)',
+        s1, choice, fm, fm_combined
+      )
+      get_logger().debug('detailed match: %s', fm_combined.detailed())
+      if fm.has_match() and (
+        seq_match_filter(fm) or
+        (seq_match_filter(fm_combined) and fm.b_start_index() < len(current_choice_str))
+      ):
+        sm = SequenceMatch(
           sequence,
           choice,
-          index1_range,
-          index2_range
+          fm.a_index_range(),
+          fm.b_index_range()
         )
         matched_choices.add(choice)
-        get_logger().debug('found match: %s', m)
-        yield m
-        index1_end = skip_whitespaces(s1, index1_end)
+        get_logger().debug('found match: %s', sm)
+        yield sm
+        if fm_next.has_match():
+          sm = SequenceMatch(
+            sequence,
+            next_choice,
+            fm_next.a_index_range(),
+            fm_next.b_index_range()
+          )
+          matched_choices.add(choice)
+          get_logger().debug('found next match: %s', sm)
+          yield sm
+          index1_end = skip_whitespaces(s1, fm_next.a_end_index())
+        else:
+          index1_end = skip_whitespaces(s1, fm.a_end_index())
         if index1_end >= len(s1):
           get_logger().debug('end reached: %d >= %d', index1_end, len(s1))
           if target_annotation.match_multiple:
@@ -418,22 +515,36 @@ def find_best_matches(
           get_logger().debug('setting start index to: %d', start_index)
     else:
       s1_sub = s1[start_index:]
-      m = fuzzy_match(choice_str, s1_sub)
-      get_logger().debug('choice: s1_sub=%s, choice=%s, m=%s (in right)', s1_sub, choice, m)
-      get_logger().debug('detailed match: %s', m.detailed())
-      if choice_match_filter(m):
-        index1_range = offset_range_by(m.b_index_range(), start_index)
-        index2_range = m.a_index_range()
-        get_logger().debug('index2_range: %s, start_index: %d', index2_range, start_index)
-        m = SequenceMatch(
+      fm_combined = fuzzy_match(choice_str, s1_sub)
+      fm, fm_next = fm_combined.a_split_at(len(current_choice_str))
+      get_logger().debug(
+        'short match: s1_sub=%s, choice=%s, fm=%s (combined: %s)',
+        s1_sub, choice, fm, fm_combined
+      )
+      get_logger().debug('detailed match: %s', fm_combined.detailed())
+      if fm.has_match() and (
+        choice_match_filter(fm) or
+        (choice_match_filter(fm_combined) and fm_combined.a_start_index() < len(current_choice_str))
+      ):
+        sm = SequenceMatch(
           sequence,
           choice,
-          index1_range,
-          index2_range
+          offset_range_by(fm.b_index_range(), start_index),
+          fm.a_index_range()
         )
         matched_choices.add(choice)
-        get_logger().debug('found match: %s', m)
-        yield m
+        get_logger().debug('found match: %s', sm)
+        yield sm
+        if fm_next.has_match():
+          sm = SequenceMatch(
+            sequence,
+            next_choice,
+            offset_range_by(fm_next.b_index_range(), start_index),
+            fm_next.a_index_range()
+          )
+          get_logger().debug('found next match: %s', sm)
+          matched_choices.add(next_choice)
+          yield sm
         if not target_annotation.match_multiple:
           break
   if too_distant_choices:
