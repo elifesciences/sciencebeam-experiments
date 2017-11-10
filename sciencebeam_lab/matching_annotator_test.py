@@ -13,6 +13,7 @@ from sciencebeam_lab.matching_annotator import (
   TargetAnnotation,
   xml_root_to_target_annotations,
   FuzzyMatchResult,
+  fuzzy_match,
   THIN_SPACE,
   EN_DASH,
   EM_DASH,
@@ -48,6 +49,14 @@ def _lines_for_tokens(tokens_by_line):
 
 def _document_for_tokens(tokens_by_line):
   return SimpleStructuredDocument(lines=_lines_for_tokens(tokens_by_line))
+
+class TestFuzzyMatch(object):
+  def test_match_count_should_be_the_same_independent_of_order(self):
+    s1 = 'this is a some sequence'
+    choice = 'this is another sequence'
+    fm_1 = fuzzy_match(s1, choice)
+    fm_2 = fuzzy_match(choice, s1)
+    assert fm_1.match_count() == fm_2.match_count()
 
 class TestFuzzyMatchResult(object):
   def test_exact_match(self):
