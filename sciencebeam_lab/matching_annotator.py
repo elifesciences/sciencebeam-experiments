@@ -3,6 +3,7 @@ from __future__ import division
 import logging
 import re
 import json
+import csv
 from configparser import ConfigParser
 from builtins import str as text
 from itertools import tee, chain, zip_longest, islice
@@ -241,7 +242,7 @@ class FuzzyMatchResult(object):
     a_junk_match_count = self.a_junk_match_count()
     b_junk_count = self.b_junk_count()
     a_gaps = a_match_len - match_count
-    return match_count / (len(self.b) + a_gaps - a_junk_match_count - b_junk_count)
+    return self.ratio_to(len(self.b) + a_gaps - a_junk_match_count - b_junk_count)
 
   def a_matching_blocks(self):
     return ((a, size) for a, _, size in self.non_empty_matching_blocks)
@@ -419,6 +420,47 @@ DEFAULT_CHOICE_FUZZY_MATCH_FILTER = get_fuzzy_match_filter(
   0.9
 )
 
+class MatchDebugFields(object):
+  TAG = 'tag'
+  MATCH_MULTIPLE = 'match_multiple'
+  TAG_VALUE_PRE = 'tag_value_pre'
+  TAG_VALUE_CURRENT = 'tag_value_current'
+  START_INDEX = 'start_index'
+  NEXT_START_INDEX = 'next_start_index'
+  REACHED_END = 'reached_end'
+  CHOICE_COMBINED = 'choice_combined'
+  CHOICE_CURRENT = 'choice_current'
+  CHOICE_NEXT = 'choice_next'
+  ACCEPTED = 'accepted'
+  TAG_TO_CHOICE_MATCH = 'tag_to_choice_match'
+  FM_COMBINED = 'fm_combined'
+  FM_COMBINED_DETAILED = 'fm_combined_detailed'
+  FM_CURRENT = 'fm_current'
+  FM_CURRENT_DETAILED = 'fm_current_detailed'
+  FM_NEXT = 'fm_next'
+  FM_NEXT_DETAILED = 'fm_next_detailed'
+
+DEFAULT_MATCH_DEBUG_COLUMNS = [
+  MatchDebugFields.TAG,
+  MatchDebugFields.MATCH_MULTIPLE,
+  MatchDebugFields.TAG_VALUE_PRE,
+  MatchDebugFields.TAG_VALUE_CURRENT,
+  MatchDebugFields.START_INDEX,
+  MatchDebugFields.NEXT_START_INDEX,
+  MatchDebugFields.REACHED_END,
+  MatchDebugFields.CHOICE_COMBINED,
+  MatchDebugFields.CHOICE_CURRENT,
+  MatchDebugFields.CHOICE_NEXT,
+  MatchDebugFields.ACCEPTED,
+  MatchDebugFields.TAG_TO_CHOICE_MATCH,
+  MatchDebugFields.FM_COMBINED,
+  MatchDebugFields.FM_COMBINED_DETAILED,
+  MatchDebugFields.FM_CURRENT,
+  MatchDebugFields.FM_CURRENT_DETAILED,
+  MatchDebugFields.FM_NEXT,
+  MatchDebugFields.FM_NEXT_DETAILED
+]
+
 def find_best_matches(
   target_annotation,
   sequence,
@@ -426,7 +468,8 @@ def find_best_matches(
   seq_match_filter=DEFAULT_SEQ_FUZZY_MATCH_FILTER,
   choice_match_filter=DEFAULT_CHOICE_FUZZY_MATCH_FILTER,
   max_gap=DEFAULT_MAX_MATCH_GAP,
-  matched_choices=None):
+  matched_choices=None,
+  match_detail_reporter=None):
 
   if matched_choices is None:
     matched_choices = PositionedSequenceSet()
@@ -441,7 +484,8 @@ def find_best_matches(
         seq_match_filter=seq_match_filter,
         choice_match_filter=choice_match_filter,
         max_gap=max_gap,
-        matched_choices=matched_choices
+        matched_choices=matched_choices,
+        match_detail_reporter=match_detail_reporter
       )
       for m in matches:
         yield m
@@ -465,6 +509,7 @@ def find_best_matches(
     else:
       choice_str = current_choice_str
       next_choice_str = None
+    current_start_index = start_index
     get_logger().debug(
       'processing choice: tag=%s, s1[:%d]=%s, s1[%d:]=%s, current=%s, next=%s (%s), combined=%s',
       target_annotation.name,
@@ -473,7 +518,10 @@ def find_best_matches(
       current_choice_str,
       next_choice_str, type(next_choice_str), choice_str
     )
-    if len(s1) - start_index >= len(current_choice_str):
+    fm_combined, fm, fm_next = None, None, None
+    reached_end = None
+    tag_to_choice_match = len(s1) - start_index < len(current_choice_str)
+    if not tag_to_choice_match:
       fm_combined = fuzzy_match(s1, choice_str)
       fm, fm_next = fm_combined.b_split_at(len(current_choice_str))
       get_logger().debug(
@@ -481,10 +529,12 @@ def find_best_matches(
         s1, choice, fm, fm_combined
       )
       get_logger().debug('detailed match: %s', fm_combined.detailed())
-      if fm.has_match() and (
+      accept_match = fm.has_match() and (
         seq_match_filter(fm) or
         (seq_match_filter(fm_combined) and fm.b_start_index() < len(current_choice_str))
-      ):
+      )
+      if accept_match:
+        accept_match = True
         sm = SequenceMatch(
           sequence,
           choice,
@@ -507,7 +557,8 @@ def find_best_matches(
           index1_end = skip_whitespaces(s1, fm_next.a_end_index())
         else:
           index1_end = skip_whitespaces(s1, fm.a_end_index())
-        if index1_end >= len(s1):
+        reached_end = index1_end >= len(s1)
+        if reached_end:
           get_logger().debug('end reached: %d >= %d', index1_end, len(s1))
           if target_annotation.match_multiple:
             start_index = 0
@@ -525,10 +576,11 @@ def find_best_matches(
         s1_sub, choice, fm, fm_combined
       )
       get_logger().debug('detailed match: %s', fm_combined.detailed())
-      if fm.has_match() and (
+      accept_match = fm.has_match() and (
         choice_match_filter(fm) or
         (choice_match_filter(fm_combined) and fm_combined.a_start_index() < len(current_choice_str))
-      ):
+      )
+      if accept_match:
         sm = SequenceMatch(
           sequence,
           choice,
@@ -550,6 +602,27 @@ def find_best_matches(
           yield sm
         if not target_annotation.match_multiple:
           break
+    if match_detail_reporter:
+      match_detail_reporter({
+        MatchDebugFields.TAG: target_annotation.name,
+        MatchDebugFields.MATCH_MULTIPLE: target_annotation.match_multiple,
+        MatchDebugFields.TAG_VALUE_PRE: s1[:current_start_index],
+        MatchDebugFields.TAG_VALUE_CURRENT: s1[current_start_index:],
+        MatchDebugFields.START_INDEX: current_start_index,
+        MatchDebugFields.NEXT_START_INDEX: start_index,
+        MatchDebugFields.REACHED_END: reached_end,
+        MatchDebugFields.CHOICE_COMBINED: choice_str,
+        MatchDebugFields.CHOICE_CURRENT: current_choice_str,
+        MatchDebugFields.CHOICE_NEXT: next_choice_str,
+        MatchDebugFields.ACCEPTED: accept_match,
+        MatchDebugFields.TAG_TO_CHOICE_MATCH: tag_to_choice_match,
+        MatchDebugFields.FM_COMBINED: fm_combined,
+        MatchDebugFields.FM_COMBINED_DETAILED: fm_combined and fm_combined.detailed_str(),
+        MatchDebugFields.FM_CURRENT: fm,
+        MatchDebugFields.FM_CURRENT_DETAILED: fm and fm.detailed_str(),
+        MatchDebugFields.FM_NEXT: fm_next,
+        MatchDebugFields.FM_NEXT_DETAILED: fm_next.detailed_str()
+      })
   if too_distant_choices:
     get_logger().debug(
       'ignored too distant choices: matched=%s (ignored=%s)',
@@ -770,9 +843,26 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
   ]))
   return target_annotations
 
+class CsvMatchDetailReporter(object):
+  def __init__(self, fp, filename=None, fields=None):
+    self.fp = fp
+    self.fields = fields or DEFAULT_MATCH_DEBUG_COLUMNS
+    self.writer = csv.writer(
+      fp,
+      delimiter='\t' if filename and filename.endswith('.tsv') else ','
+    )
+    self.writer.writerow(self.fields)
+
+  def __call__(self, row):
+    self.writer.writerow([row.get(k) for k in self.fields])
+
+  def close(self):
+    self.fp.close()
+
 class MatchingAnnotator(AbstractAnnotator):
-  def __init__(self, target_annotations):
+  def __init__(self, target_annotations, match_detail_reporter=None):
     self.target_annotations = target_annotations
+    self.match_detail_reporter = match_detail_reporter
 
   def annotate(self, structured_document):
     pending_sequences = []
@@ -813,7 +903,8 @@ class MatchingAnnotator(AbstractAnnotator):
         target_annotation,
         target_value,
         untagged_pending_sequences,
-        matched_choices=matched_choices
+        matched_choices=matched_choices,
+        match_detail_reporter=self.match_detail_reporter
       )
       for m in matches:
         choice = m.seq2

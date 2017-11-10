@@ -11,6 +11,7 @@ from sciencebeam_lab.annotator import (
 
 from sciencebeam_lab.matching_annotator import (
   MatchingAnnotator,
+  CsvMatchDetailReporter,
   parse_xml_mapping,
   xml_root_to_target_annotations
 )
@@ -79,6 +80,10 @@ def parse_args(argv=None):
     '--debug', action='store_true', required=False,
     help='enable debug logging'
   )
+  parser.add_argument(
+    '--debug-match', type=str, required=False,
+    help='debug matches and save as csv'
+  )
   args = parser.parse_args(argv)
   return args
 
@@ -139,15 +144,22 @@ def convert(args):
   logger.debug('svg_filename_pattern: %s', svg_filename_pattern)
   lxml_root = etree.parse(args.lxml_path).getroot()
 
+  match_detail_reporter = None
   if args.annotate:
     annotators = DEFAULT_ANNOTATORS
+    if args.debug_match:
+      match_detail_reporter = CsvMatchDetailReporter(
+        open(args.debug_match, 'w'), args.debug_match
+      )
     if args.xml_path:
       xml_mapping = parse_xml_mapping(args.xml_mapping_path)
       target_annotations = xml_root_to_target_annotations(
         etree.parse(args.xml_path).getroot(),
         xml_mapping
       )
-      annotators = annotators + [MatchingAnnotator(target_annotations)]
+      annotators = annotators + [MatchingAnnotator(
+        target_annotations, match_detail_reporter=match_detail_reporter
+      )]
     annotator = Annotator(annotators)
   else:
     annotator = None
@@ -169,6 +181,8 @@ def convert(args):
     logger.info('tagging evaluation:\n%s', '\n'.join([
       'page{}: {}'.format(1 + i, r) for i, r in enumerate(tagging_evaluation_results)
     ]))
+  if match_detail_reporter:
+    match_detail_reporter.close()
 
 def main():
   args = parse_args()
