@@ -466,8 +466,11 @@ def find_best_matches(
       choice_str = current_choice_str
       next_choice_str = None
     get_logger().debug(
-      'processing choice: tag=%s, s1=%s, current=%s, next=%s (%s), combined=%s',
-      target_annotation.name, s1, current_choice_str,
+      'processing choice: tag=%s, s1[:%d]=%s, s1[%d:]=%s, current=%s, next=%s (%s), combined=%s',
+      target_annotation.name,
+      start_index, s1[:start_index],
+      start_index, s1[start_index:],
+      current_choice_str,
       next_choice_str, type(next_choice_str), choice_str
     )
     if len(s1) - start_index >= len(current_choice_str):
