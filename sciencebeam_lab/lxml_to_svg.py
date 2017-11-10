@@ -17,7 +17,8 @@ from sciencebeam_lab.matching_annotator import (
 )
 
 from sciencebeam_lab.annotation_evaluation import (
-  evaluate_document_by_page
+  evaluate_document_by_page,
+  to_csv_file as to_annotation_evaluation_csv_file
 )
 
 from sciencebeam_lab.svg_structured_document import (
@@ -83,6 +84,10 @@ def parse_args(argv=None):
   parser.add_argument(
     '--debug-match', type=str, required=False,
     help='debug matches and save as csv'
+  )
+  parser.add_argument(
+    '--annotation-evaluation-csv', type=str, required=False,
+    help='Annotation evaluation CSV output file'
   )
   args = parser.parse_args(argv)
   return args
@@ -181,6 +186,14 @@ def convert(args):
     logger.info('tagging evaluation:\n%s', '\n'.join([
       'page{}: {}'.format(1 + i, r) for i, r in enumerate(tagging_evaluation_results)
     ]))
+    if args.annotation_evaluation_csv:
+      with open(args.annotation_evaluation_csv, 'w') as fp:
+        to_annotation_evaluation_csv_file(
+          fp,
+          tagging_evaluation_results,
+          filename=args.annotation_evaluation_csv,
+          document=os.path.basename(args.lxml_path)
+        )
   if match_detail_reporter:
     match_detail_reporter.close()
 
