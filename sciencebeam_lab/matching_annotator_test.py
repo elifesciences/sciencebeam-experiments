@@ -537,6 +537,22 @@ class TestXmlRootToTargetAnnotations(object):
       (TAG1, 'tag1.1'), (TAG2, 'tag2.1'), (TAG1, 'tag1.2'), (TAG2, 'tag2.2')
     ]
 
+  def test_should_return_target_annotations_in_order_of_priority_first(self):
+    xml_root = E.article(
+      E.tag1('tag1.1'), E.tag2('tag2.1'), E.tag1('tag1.2'), E.tag2('tag2.2'),
+    )
+    xml_mapping = {
+      'article': {
+        TAG1: 'tag1',
+        TAG2: 'tag2',
+        TAG2 + XmlMappingSuffix.PRIORITY: '1'
+      }
+    }
+    target_annotations = xml_root_to_target_annotations(xml_root, xml_mapping)
+    assert [(ta.name, ta.value) for ta in target_annotations] == [
+      (TAG2, 'tag2.1'), (TAG2, 'tag2.2'), (TAG1, 'tag1.1'), (TAG1, 'tag1.2')
+    ]
+
 class TestMatchingAnnotator(object):
   def test_should_not_fail_on_empty_document(self):
     doc = SimpleStructuredDocument(lines=[])

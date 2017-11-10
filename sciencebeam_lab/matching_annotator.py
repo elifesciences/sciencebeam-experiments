@@ -69,6 +69,7 @@ class XmlMappingSuffix(object):
   CHILDREN_CONCAT = '.children.concat'
   CHILDREN_RANGE = '.children.range'
   UNMATCHED_PARENT_TEXT = '.unmatched-parent-text'
+  PRIORITY = '.priority'
 
 @python_2_unicode_compatible
 class TargetAnnotation(object):
@@ -789,6 +790,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     )
     re_pattern = mapping.get(k + XmlMappingSuffix.REGEX)
     re_compiled_pattern = re.compile(re_pattern) if re_pattern else None
+    priority = int(mapping.get(k + XmlMappingSuffix.PRIORITY, '0'))
 
     xpaths = parse_xpaths(mapping[k])
     get_logger().debug('xpaths(%s): %s', k, xpaths)
@@ -812,7 +814,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
           else sorted(text_content_list, key=lambda s: -len(s))
         )
         target_annotations_with_pos.append((
-          e_pos,
+          (-priority, e_pos),
           TargetAnnotation(
             value,
             k,
@@ -821,9 +823,9 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
           )
         ))
       if standalone_values:
-        for standalone_value in standalone_values:
+        for i, standalone_value in enumerate(standalone_values):
           target_annotations_with_pos.append((
-            e_pos,
+            (-priority, e_pos, i),
             TargetAnnotation(
               standalone_value,
               k,
@@ -835,6 +837,7 @@ def xml_root_to_target_annotations(xml_root, xml_mapping):
     target_annotations_with_pos,
     key=lambda x: x[0]
   )
+  get_logger().debug('target_annotations_with_pos:\n%s', target_annotations_with_pos)
   target_annotations = [
     x[1] for x in target_annotations_with_pos
   ]
