@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from contextlib import contextmanager
 
 from six import (
   with_metaclass,
@@ -44,29 +45,39 @@ class AbstractTestCommonSequenceMatcher(object, with_metaclass(ABCMeta)):
   def _convert(self, x):
     pass
 
+  @contextmanager
+  def _wrap_test(self):
+    yield
+
   def test_should_not_return_non_zero_blocks_for_no(self):
-    sm = self._matcher(a='a', b='b')
-    assert _non_zero(sm.get_matching_blocks()) == []
+    with self._wrap_test():
+      sm = self._matcher(a='a', b='b')
+      assert _non_zero(sm.get_matching_blocks()) == []
 
   def test_should_add_zero_block_with_final_indices(self):
-    sm = self._matcher(a='a', b='b')
-    assert sm.get_matching_blocks() == [(1, 1, 0)]
+    with self._wrap_test():
+      sm = self._matcher(a='a', b='b')
+      assert sm.get_matching_blocks() == [(1, 1, 0)]
 
   def test_should_return_single_character_match(self):
-    sm = self._matcher(a='a', b='a')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
+    with self._wrap_test():
+      sm = self._matcher(a='a', b='a')
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
 
   def test_should_return_combine_character_match_block(self):
-    sm = self._matcher(a='abc', b='abc')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
+    with self._wrap_test():
+      sm = self._matcher(a='abc', b='abc')
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
 
   def test_should_return_combine_character_match_blocks_with_gaps(self):
-    sm = self._matcher(a='abc123xyz', b='abc987xyz')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3), (6, 6, 3)]
+    with self._wrap_test():
+      sm = self._matcher(a='abc123xyz', b='abc987xyz')
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3), (6, 6, 3)]
 
   def test_should_align_using_custom_scoring_fn(self):
-    sm = self._matcher(a='a', b='a', scoring=DEFAULT_CUSTOM_SCORING)
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
+    with self._wrap_test():
+      sm = self._matcher(a='a', b='a', scoring=DEFAULT_CUSTOM_SCORING)
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 1)]
 
 class AbstractTestLocalSequenceMatcher(AbstractTestCommonSequenceMatcher):
   def _matcher(self, a, b, scoring=None):
@@ -77,8 +88,9 @@ class AbstractTestLocalSequenceMatcher(AbstractTestCommonSequenceMatcher):
     )
 
   def test_should_not_match_block_after_big_gap(self):
-    sm = self._matcher(a='abcxyz', b='abc123456xyz')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
+    with self._wrap_test():
+      sm = self._matcher(a='abcxyz', b='abc123456xyz')
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3)]
 
 class TestLocalSequenceMatcherWithUnicode(AbstractTestLocalSequenceMatcher):
   def _convert(self, x):
@@ -107,11 +119,10 @@ class TestLocalSequenceMatcherWithCustomObjectList(AbstractTestLocalSequenceMatc
 class TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative(
   TestLocalSequenceMatcherWithNumpyInt32Array):
 
-  def _matcher(self, a, b, scoring=None):
+  @contextmanager
+  def _wrap_test(self):
     with require_native(False):
-      return super(TestLocalSequenceMatcherWithNumpyInt32ArrayWithoutNative, self)._matcher(
-        a=a, b=b, scoring=scoring
-      )
+      yield
 
 class AbstractTestGlobalSequenceMatcher(AbstractTestCommonSequenceMatcher):
   def _matcher(self, a, b, scoring=None):
@@ -123,8 +134,9 @@ class AbstractTestGlobalSequenceMatcher(AbstractTestCommonSequenceMatcher):
       )
 
   def test_should_prefer_match_block_after_big_gap(self):
-    sm = self._matcher(a='abcxyz', b='abc123456xyz')
-    assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3), (3, 9, 3)]
+    with self._wrap_test():
+      sm = self._matcher(a='abcxyz', b='abc123456xyz')
+      assert _non_zero(sm.get_matching_blocks()) == [(0, 0, 3), (3, 9, 3)]
 
 class TestGlobalSequenceMatcherWithUnicode(AbstractTestGlobalSequenceMatcher):
   def _convert(self, x):

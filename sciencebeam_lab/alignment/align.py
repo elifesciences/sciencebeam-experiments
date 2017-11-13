@@ -180,7 +180,7 @@ def alignment_matrix_traceback(score_matrix, start_locs, is_local, limit):
     )
   else:
     paths = alignment_matrix_traceback_py(
-      score_matrix, start_locs, is_local
+      score_matrix, reversed(start_locs), is_local
     )
     if limit:
       paths = islice(paths, limit)
@@ -294,6 +294,7 @@ class LocalSequenceMatcher(AbstractSequenceMatcher):
     max_score = score_matrix.max()
 
     max_score_loc = np.argwhere(score_matrix == max_score)
+    get_logger().debug('max_score_loc: %s', max_score_loc)
     is_local = True
     paths = alignment_matrix_traceback(score_matrix, max_score_loc, is_local, limit=limit or 0)
     return (
