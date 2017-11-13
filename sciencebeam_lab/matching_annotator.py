@@ -4,13 +4,13 @@ import logging
 import re
 import json
 import csv
-from configparser import ConfigParser
 from builtins import str as text
 from itertools import tee, chain, islice
 
 from future.utils import python_2_unicode_compatible
 
 from six.moves import zip_longest
+from six.moves.configparser import ConfigParser
 
 from lxml import etree
 
