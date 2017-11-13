@@ -7,6 +7,8 @@ from setuptools import (
 
 from Cython.Build import cythonize
 
+import numpy as np
+
 with open(os.path.join('requirements.txt'), 'r') as f:
   REQUIRED_PACKAGES = f.readlines()
 
@@ -19,5 +21,6 @@ setup(
   packages=packages,
   include_package_data=True,
   description='ScienceBeam Lab',
-  ext_modules=cythonize("sciencebeam_lab/alignment/align_fast_utils.pyx")
+  ext_modules=cythonize("sciencebeam_lab/alignment/align_fast_utils.pyx"),
+  include_dirs=[np.get_include()]
 )
