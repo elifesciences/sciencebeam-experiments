@@ -142,6 +142,12 @@ def get_cloud_project():
         )
       raise
 
+def get_default_job_name():
+  from getpass import getuser
+  from time import gmtime, strftime
+  timestamp_str = strftime("%Y%m%d-%H%M%S", gmtime())
+  return 'sciencebeam-lab-%s-%s' % (getuser(), timestamp_str)
+
 def parse_args(argv=None):
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -178,6 +184,10 @@ def parse_args(argv=None):
     type=int,
     help='The number of workers.'
   )
+  parser.add_argument(
+    '--job_name', type=str, required=False,
+    help='The name of the cloud job'
+  )
   # parsed_args, other_args = parser.parse_known_args(argv)
   parsed_args = parser.parse_args(argv)
 
@@ -205,6 +215,8 @@ def parse_args(argv=None):
       'save_main_session':
         True,
     }
+    if not parsed_args.job_name:
+      parsed_args.job_name = get_default_job_name()
   else:
     # Flags which need to be set for local runs.
     default_values = {
