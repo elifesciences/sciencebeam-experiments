@@ -2,6 +2,7 @@
 /.cache
 /.temp
 /venv
+/*.egg-info
 
 *.pyc
 *.so
