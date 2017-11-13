@@ -4,6 +4,11 @@ import os
 
 from lxml import etree
 
+from sciencebeam_lab.utils.csv_utils import (
+  open_csv_output,
+  write_dict_csv
+)
+
 from sciencebeam_lab.annotator import (
   Annotator,
   DEFAULT_ANNOTATORS
@@ -18,7 +23,8 @@ from sciencebeam_lab.matching_annotator import (
 
 from sciencebeam_lab.annotation_evaluation import (
   evaluate_document_by_page,
-  to_csv_file as to_annotation_evaluation_csv_file
+  DEFAULT_EVALUATION_COLUMNS,
+  to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
 from sciencebeam_lab.svg_structured_document import (
@@ -154,7 +160,8 @@ def convert(args):
     annotators = DEFAULT_ANNOTATORS
     if args.debug_match:
       match_detail_reporter = CsvMatchDetailReporter(
-        open(args.debug_match, 'w'), args.debug_match
+        open_csv_output(args.debug_match),
+        args.debug_match
       )
     if args.xml_path:
       xml_mapping = parse_xml_mapping(args.xml_mapping_path)
@@ -187,13 +194,14 @@ def convert(args):
       'page{}: {}'.format(1 + i, r) for i, r in enumerate(tagging_evaluation_results)
     ]))
     if args.annotation_evaluation_csv:
-      with open(args.annotation_evaluation_csv, 'w') as fp:
-        to_annotation_evaluation_csv_file(
-          fp,
+      write_dict_csv(
+        args.annotation_evaluation_csv,
+        DEFAULT_EVALUATION_COLUMNS,
+        to_annotation_evaluation_csv_dict_rows(
           tagging_evaluation_results,
-          filename=args.annotation_evaluation_csv,
           document=os.path.basename(args.lxml_path)
         )
+      )
   if match_detail_reporter:
     match_detail_reporter.close()
 

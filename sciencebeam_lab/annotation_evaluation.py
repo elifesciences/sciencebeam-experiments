@@ -1,7 +1,6 @@
 from __future__ import division
 
 from collections import Counter
-import csv
 
 from six import iteritems
 
@@ -57,16 +56,3 @@ def to_csv_dict_rows(evaluation_result, document=None):
     ]
     for page_index, page_evaluation in enumerate(evaluation_result)
   )
-
-def to_csv_file(fp, evaluation_result, fields=None, filename=None, document=None):
-  if fields is None:
-    fields = DEFAULT_EVALUATION_COLUMNS
-  writer = csv.writer(
-    fp,
-    delimiter='\t' if filename and filename.endswith('.tsv') else ','
-  )
-  writer.writerow(fields)
-  writer.writerows((
-    [row.get(k) for k in fields]
-    for row in to_csv_dict_rows(evaluation_result, document)
-  ))

@@ -6,11 +6,18 @@ import json
 import csv
 from configparser import ConfigParser
 from builtins import str as text
-from itertools import tee, chain, zip_longest, islice
+from itertools import tee, chain, islice
 
 from future.utils import python_2_unicode_compatible
 
+from six.moves import zip_longest
+
 from lxml import etree
+
+from sciencebeam_lab.utils.csv_utils import (
+  csv_delimiter_by_filename,
+  write_csv_row
+)
 
 from sciencebeam_lab.alignment.align import (
   LocalSequenceMatcher,
@@ -23,7 +30,8 @@ from sciencebeam_lab.alignment.WordSequenceMatcher import (
 from sciencebeam_lab.collection_utils import (
   filter_truthy,
   strip_all,
-  iter_flatten
+  iter_flatten,
+  extract_from_dict
 )
 
 from sciencebeam_lab.xml_utils import (
@@ -131,7 +139,8 @@ class SequenceWrapper(object):
     return '{}({})'.format('SequenceWrapper', self.tokens_as_str)
 
 class SequenceWrapperWithPosition(SequenceWrapper):
-  def __init__(self, *args, position=None, **kwargs):
+  def __init__(self, *args, **kwargs):
+    position, kwargs = extract_from_dict(kwargs, 'position')
     super(SequenceWrapperWithPosition, self).__init__(*args, **kwargs)
     self.position = position
 
@@ -852,12 +861,12 @@ class CsvMatchDetailReporter(object):
     self.fields = fields or DEFAULT_MATCH_DEBUG_COLUMNS
     self.writer = csv.writer(
       fp,
-      delimiter='\t' if filename and filename.endswith('.tsv') else ','
+      delimiter=csv_delimiter_by_filename(filename)
     )
     self.writer.writerow(self.fields)
 
   def __call__(self, row):
-    self.writer.writerow([row.get(k) for k in self.fields])
+    write_csv_row(self.writer, [row.get(k) for k in self.fields])
 
   def close(self):
     self.fp.close()

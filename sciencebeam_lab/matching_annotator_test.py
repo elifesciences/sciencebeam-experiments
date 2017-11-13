@@ -1,3 +1,5 @@
+from __future__ import division
+
 import json
 
 from lxml.builder import E
