@@ -9,6 +9,7 @@ from itertools import tee, chain, islice
 
 from future.utils import python_2_unicode_compatible
 
+import six
 from six.moves import zip_longest
 from six.moves.configparser import ConfigParser
 
@@ -643,8 +644,14 @@ def find_best_matches(
 def parse_xml_mapping(xml_mapping_filename):
   with open(xml_mapping_filename, 'r') as f:
     config = ConfigParser()
-    config.read_file(f)
-    return config
+    if six.PY3:
+      config.read_file(f)
+    else:
+      config.readfp(f)
+    return {
+      k: dict(config.items(k))
+      for k in config.sections()
+    }
 
 def apply_pattern(s, compiled_pattern):
   m = compiled_pattern.match(s)
