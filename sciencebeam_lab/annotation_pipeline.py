@@ -17,8 +17,13 @@ from apache_beam.io.filesystems import FileSystems
 from apache_beam.io.textio import WriteToText
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 
+from sciencebeam_lab.xml_utils import (
+  xml_from_string_with_recover
+)
+
 from sciencebeam_lab.beam_utils.utils import (
-  TransformAndLog
+  TransformAndLog,
+  MapOrLog
 )
 
 from sciencebeam_lab.beam_utils.csv import (
@@ -126,8 +131,10 @@ def read_all_from_path(path):
 
 def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
   lxml_root = etree.fromstring(lxml_content)
+  # use a more lenient way to parse xml as xml errors are not uncomment
+  xml_root = xml_from_string_with_recover(xml_content)
   target_annotations = xml_root_to_target_annotations(
-    etree.fromstring(xml_content),
+    xml_root,
     xml_mapping
   )
   annotators = DEFAULT_ANNOTATORS + [MatchingAnnotator(
@@ -200,13 +207,18 @@ def configure_pipeline(p, opt):
       'lxml_content': read_all_from_path(filenames[0]),
       'xml_content': read_all_from_path(filenames[1])
     }) |
-    "ConvertAndAnnotate" >> beam.Map(lambda v: {
+    "ConvertAndAnnotate" >> MapOrLog(lambda v: {
       'lxml_filename': v['lxml_filename'],
       'xml_filename': v['xml_filename'],
       'svg_pages': list(convert_and_annotate_lxml_content(
         v['lxml_content'], v['xml_content'], xml_mapping
       ))
-    })
+    }, log_fn=lambda e, v: (
+      get_logger().warning(
+        'caucht exception (ignoring item): %s, lxml: %s, xml: %s',
+        e, v['lxml_filename'], v['xml_filename']
+      )
+    ))
   )
   _ = (
     annotation_results |

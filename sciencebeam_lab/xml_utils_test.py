@@ -2,7 +2,8 @@ from lxml.builder import E
 
 from sciencebeam_lab.xml_utils import (
   get_text_content,
-  get_immediate_text
+  get_immediate_text,
+  xml_from_string_with_recover
 )
 
 SOME_VALUE_1 = 'some value1'
@@ -38,3 +39,24 @@ class TestGetImmediateText(object):
   def test_should_not_return_text_of_child_element(self):
     node = E.parent(E.child(SOME_VALUE_1))
     assert get_immediate_text(node) == []
+
+class TestXmlFromStringWithRecover(object):
+  def test_should_parse_clean_xml(self):
+    root = xml_from_string_with_recover('<root><child1>%s</child1></root>' % SOME_VALUE_1)
+    node = root.find('child1')
+    assert node is not None
+    assert node.text == SOME_VALUE_1
+
+  def test_should_parse_xml_with_unencoded_ampersand(self):
+    value = 'A & B'
+    root = xml_from_string_with_recover('<root><child1>%s</child1></root>' % value)
+    node = root.find('child1')
+    assert node is not None
+    assert node.text == 'A  B'
+
+  def test_should_parse_xml_with_unencoded_unknown_entity(self):
+    value = 'A &unknown; B'
+    root = xml_from_string_with_recover('<root><child1>%s</child1></root>' % value)
+    node = root.find('child1')
+    assert node is not None
+    assert node.text == 'A  B'

@@ -1,3 +1,4 @@
+from lxml import etree
 
 def _get_text_content_and_exclude(node, exclude):
   result = ''
@@ -27,3 +28,7 @@ def get_immediate_text(node):
 
 def get_text_content_list(nodes, exclude=None):
   return [get_text_content(node, exclude=exclude) for node in nodes]
+
+def xml_from_string_with_recover(s):
+  parser = etree.XMLParser(recover=True)
+  return etree.fromstring(s, parser=parser)

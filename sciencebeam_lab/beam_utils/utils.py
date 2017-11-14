@@ -14,12 +14,16 @@ def Spy(f):
 def MapSpy(f):
   return beam.Map(Spy(f))
 
-def MapOrLog(fn):
+def MapOrLog(fn, log_fn=None):
+  if log_fn is None:
+    log_fn = lambda e, x: (
+      get_logger().warning('caucht exception (ignoring item): %s, input: %.100s...', e, x)
+    )
   def wrapper(x):
     try:
       yield fn(x)
     except Exception as e:
-      get_logger().warn('caucht exception (ignoring item): %s, input: %.100s...', e, x)
+      log_fn(e, x)
   return beam.FlatMap(wrapper)
 
 LEVEL_MAP = {
