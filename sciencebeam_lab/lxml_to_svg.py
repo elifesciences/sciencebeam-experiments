@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 
+from six import text_type
+
 from lxml import etree
 
 from sciencebeam_lab.utils.csv_utils import (
@@ -52,7 +54,7 @@ def _create_xml_node(tag, text=None, attrib=None):
     node.text = text
   if attrib is not None:
     for k, v in attrib.items():
-      node.attrib[k] = str(v)
+      node.attrib[k] = text_type(v)
   return node
 
 def svg_pattern_for_lxml_path(lxml_path):
