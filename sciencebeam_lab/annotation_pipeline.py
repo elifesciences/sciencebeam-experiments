@@ -40,6 +40,10 @@ from sciencebeam_lab.matching_annotator import (
   xml_root_to_target_annotations
 )
 
+from sciencebeam_lab.visualize_svg_annotation import (
+  visualize_svg_annotations
+)
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -119,6 +123,10 @@ def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
   annotator = Annotator(annotators)
   svg_roots = list(iter_svg_pages_for_lxml(lxml_root))
   annotator.annotate(SvgStructuredDocument(svg_roots))
+  svg_roots = [
+    visualize_svg_annotations(svg_root)
+    for svg_root in svg_roots
+  ]
   return [etree.tostring(svg_root) for svg_root in svg_roots]
 
 def relative_path(base_path, path):
