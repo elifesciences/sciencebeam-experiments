@@ -7,6 +7,8 @@ import errno
 import logging
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
+from itertools import groupby
+from functools import reduce
 
 from lxml import etree
 
@@ -23,8 +25,26 @@ from sciencebeam_lab.lxml_to_svg import (
   iter_svg_pages_for_lxml
 )
 
+from sciencebeam_lab.svg_structured_document import (
+  SvgStructuredDocument
+)
+
+from sciencebeam_lab.annotator import (
+  Annotator,
+  DEFAULT_ANNOTATORS
+)
+
+from sciencebeam_lab.matching_annotator import (
+  MatchingAnnotator,
+  parse_xml_mapping,
+  xml_root_to_target_annotations
+)
+
 def get_logger():
   return logging.getLogger(__name__)
+
+def dirname(path):
+  return FileSystems.split(path)[0]
 
 def create_fn_api_runner():
   from apache_beam.runners.portability.fn_api_runner import FnApiRunner
@@ -32,6 +52,49 @@ def create_fn_api_runner():
 
 def find_matching_filenames(pattern):
   return [x.path for x in FileSystems.match([pattern])[0].metadata_list]
+
+def group_files_by_parent_directory(filenames):
+  return {
+    k: list(v)
+    for k, v in groupby(sorted(filenames), lambda x: os.path.dirname(x))
+  }
+
+def zip_by_keys(*dict_list):
+  keys = reduce(lambda agg, v: agg | set(v.keys()), dict_list, set())
+  return (
+    [d.get(k) for d in dict_list]
+    for k in sorted(keys)
+  )
+
+def find_file_pairs_grouped_by_parent_directory(patterns):
+  matching_files_by_pattern = [
+    find_matching_filenames(pattern) for pattern in patterns
+  ]
+  get_logger().info(
+    'found number of files %s',
+    ', '.join(
+      '%s: %d' % (pattern, len(files))
+      for pattern, files in zip(patterns, matching_files_by_pattern)
+    )
+  )
+  patterns_without_files = [
+    pattern
+    for pattern, files in zip(patterns, matching_files_by_pattern)
+    if len(files) == 0
+  ]
+  if patterns_without_files:
+    raise RuntimeError('no files found for: %s' % patterns_without_files)
+  grouped_files_by_pattern = [
+    group_files_by_parent_directory(files) for files in matching_files_by_pattern
+  ]
+  for files_in_group_by_pattern in zip_by_keys(*grouped_files_by_pattern):
+    if all(len(files or []) == 1 for files in files_in_group_by_pattern):
+      yield tuple([files[0] for files in files_in_group_by_pattern])
+    else:
+      get_logger().info(
+        'no exclusively matching files found: %s',
+        [files for files in files_in_group_by_pattern]
+      )
 
 def read_all_from_path(path):
   buffer_size = 4096 * 1024
@@ -44,15 +107,30 @@ def read_all_from_path(path):
       out.write(buf)
     return out.getvalue()
 
-def convert_and_annotate_lxml_content(lxml_content):
+def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
   lxml_root = etree.fromstring(lxml_content)
+  target_annotations = xml_root_to_target_annotations(
+    etree.fromstring(xml_content),
+    xml_mapping
+  )
+  annotators = DEFAULT_ANNOTATORS + [MatchingAnnotator(
+    target_annotations
+  )]
+  annotator = Annotator(annotators)
   svg_roots = list(iter_svg_pages_for_lxml(lxml_root))
+  annotator.annotate(SvgStructuredDocument(svg_roots))
   return [etree.tostring(svg_root) for svg_root in svg_roots]
 
 def relative_path(base_path, path):
   if not base_path.endswith('/'):
     base_path += '/'
   return path[len(base_path):] if path.startswith(base_path) else path
+
+def is_relative_path(path):
+  return not path.startswith('/') and '://' not in path
+
+def join_if_relative_path(base_path, path):
+  return FileSystems.join(base_path, path) if is_relative_path(path) else path
 
 def mkdirs_if_not_exists(path):
   if not FileSystems.exists(path):
@@ -63,9 +141,6 @@ def mkdirs_if_not_exists(path):
       if not FileSystems.exists(path):
         raise
 
-def basename(path):
-  return FileSystems.split(path)[0]
-
 def output_path_for_data_path(base_data_path, data_path, output_path):
   return FileSystems.join(
     output_path,
@@ -73,7 +148,7 @@ def output_path_for_data_path(base_data_path, data_path, output_path):
   )
 
 def save_svg_roots(output_filename, svg_pages):
-  mkdirs_if_not_exists(basename(output_filename))
+  mkdirs_if_not_exists(dirname(output_filename))
   with FileSystems.create(output_filename) as f:
     with ZipFile(f, 'w', compression=ZIP_DEFLATED) as zf:
       for i, svg_page in enumerate(svg_pages):
@@ -84,25 +159,37 @@ def save_svg_roots(output_filename, svg_pages):
     return output_filename
 
 def configure_pipeline(p, opt):
+  xml_mapping = parse_xml_mapping(opt.xml_mapping_path)
   _ = (
     p |
-    beam.Create([opt.lxml_path]) |
-    "FindFiles" >> TransformAndLog(
-      beam.FlatMap(lambda pattern: find_matching_filenames(pattern)),
-      log_prefix='files: ',
+    beam.Create([[
+      join_if_relative_path(opt.base_data_path, s)
+      for s in [opt.lxml_path, opt.xml_path]
+    ]]) |
+    "FindFilePairs" >> TransformAndLog(
+      beam.FlatMap(
+        lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
+      ),
+      log_prefix='file pairs: ',
       log_level='debug'
     ) |
-    "ReadFileContent" >> beam.Map(lambda filename: {
-      'filename': filename,
-      'content': read_all_from_path(filename)
+    "ReadFileContent" >> beam.Map(lambda filenames: {
+      'lxml_filename': filenames[0],
+      'xml_filename': filenames[1],
+      'lxml_content': read_all_from_path(filenames[0]),
+      'xml_content': read_all_from_path(filenames[1])
     }) |
     "ConvertAndAnnotate" >> beam.Map(lambda v: {
-      'filename': v['filename'],
-      'svg_pages': list(convert_and_annotate_lxml_content(v['content']))
+      'lxml_filename': v['lxml_filename'],
+      'xml_filename': v['xml_filename'],
+      'svg_pages': list(convert_and_annotate_lxml_content(
+        v['lxml_content'], v['xml_content'], xml_mapping
+      ))
     }) |
     "SaveOutput" >> TransformAndLog(
         beam.Map(lambda v: {
-        'filename': v['filename'],
+        'lxml_filename': v['lxml_filename'],
+        'xml_filename': v['xml_filename'],
         'output_filename': save_svg_roots(
           output_path_for_data_path(
             opt.base_data_path,
@@ -112,7 +199,7 @@ def configure_pipeline(p, opt):
           v['svg_pages']
         )
       }),
-      log_fn=lambda x: get_logger().info('result: %s', x)
+      log_fn=lambda x: get_logger().info('saved result: %s', x)
     )
   )
 
@@ -156,7 +243,15 @@ def parse_args(argv=None):
   )
   parser.add_argument(
     '--lxml-path', type=str, required=True,
-    help='path to lxml file'
+    help='path to lxml file(s)'
+  )
+  parser.add_argument(
+    '--xml-path', type=str, required=True,
+    help='path to xml file(s)'
+  )
+  parser.add_argument(
+    '--xml-mapping-path', type=str, default='annot-xml-front.conf',
+    help='path to xml mapping file'
   )
   parser.add_argument(
     '--output-path', required=False,
