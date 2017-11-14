@@ -21,6 +21,10 @@ from sciencebeam_lab.beam_utils.utils import (
   TransformAndLog
 )
 
+from sciencebeam_lab.beam_utils.csv import (
+  WriteDictCsv
+)
+
 from sciencebeam_lab.lxml_to_svg import (
   iter_svg_pages_for_lxml
 )
@@ -44,11 +48,20 @@ from sciencebeam_lab.visualize_svg_annotation import (
   visualize_svg_annotations
 )
 
+from sciencebeam_lab.annotation_evaluation import (
+  evaluate_document_by_page,
+  DEFAULT_EVALUATION_COLUMNS,
+  to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
+)
+
 def get_logger():
   return logging.getLogger(__name__)
 
 def dirname(path):
   return FileSystems.split(path)[0]
+
+def basename(path):
+  return FileSystems.split(path)[1]
 
 def create_fn_api_runner():
   from apache_beam.runners.portability.fn_api_runner import FnApiRunner
@@ -127,7 +140,7 @@ def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
     visualize_svg_annotations(svg_root)
     for svg_root in svg_roots
   ]
-  return [etree.tostring(svg_root) for svg_root in svg_roots]
+  return svg_roots
 
 def relative_path(base_path, path):
   if not base_path.endswith('/'):
@@ -162,13 +175,13 @@ def save_svg_roots(output_filename, svg_pages):
       for i, svg_page in enumerate(svg_pages):
         svg_page_filename = 'page-%s.svg' % (1 + i)
         get_logger().debug('svg_page_filename: %s', svg_page_filename)
-        data = svg_page
+        data = etree.tostring(svg_page)
         zf.writestr(svg_page_filename, data)
     return output_filename
 
 def configure_pipeline(p, opt):
   xml_mapping = parse_xml_mapping(opt.xml_mapping_path)
-  _ = (
+  annotation_results = (
     p |
     beam.Create([[
       join_if_relative_path(opt.base_data_path, s)
@@ -193,9 +206,12 @@ def configure_pipeline(p, opt):
       'svg_pages': list(convert_and_annotate_lxml_content(
         v['lxml_content'], v['xml_content'], xml_mapping
       ))
-    }) |
+    })
+  )
+  _ = (
+    annotation_results |
     "SaveOutput" >> TransformAndLog(
-        beam.Map(lambda v: {
+      beam.Map(lambda v: {
         'lxml_filename': v['lxml_filename'],
         'xml_filename': v['xml_filename'],
         'output_filename': save_svg_roots(
@@ -210,6 +226,34 @@ def configure_pipeline(p, opt):
       log_fn=lambda x: get_logger().info('saved result: %s', x)
     )
   )
+  if opt.annotation_evaluation_csv:
+    annotation_evaluation_csv_name, annotation_evaluation_ext = (
+      os.path.splitext(opt.annotation_evaluation_csv)
+    )
+    _ = (
+      annotation_results |
+      "EvaluateAnnotations" >> TransformAndLog(
+        beam.Map(lambda v: {
+          'lxml_filename': v['lxml_filename'],
+          'xml_filename': v['xml_filename'],
+          'annotation_evaluation': evaluate_document_by_page(
+            SvgStructuredDocument(v['svg_pages'])
+          )
+        }),
+        log_fn=lambda x: get_logger().info('annotation evaluation result: %s', x)
+      ) |
+      "FlattenAnotationEvaluationResults" >> beam.FlatMap(
+        lambda v: to_annotation_evaluation_csv_dict_rows(
+          v['annotation_evaluation'],
+          document=basename(v['lxml_filename'])
+        )
+      ) |
+      "WriteAnnotationEvaluationToCsv" >> WriteDictCsv(
+        join_if_relative_path(opt.output_path, annotation_evaluation_csv_name),
+        file_name_suffix=annotation_evaluation_ext,
+        columns=DEFAULT_EVALUATION_COLUMNS
+      )
+    )
 
 def get_cloud_project():
   cmd = [
@@ -260,6 +304,10 @@ def parse_args(argv=None):
   parser.add_argument(
     '--xml-mapping-path', type=str, default='annot-xml-front.conf',
     help='path to xml mapping file'
+  )
+  parser.add_argument(
+    '--annotation-evaluation-csv', type=str, required=False,
+    help='Annotation evaluation CSV output file'
   )
   parser.add_argument(
     '--output-path', required=False,
