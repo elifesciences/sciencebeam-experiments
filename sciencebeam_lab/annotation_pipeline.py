@@ -21,6 +21,10 @@ from sciencebeam_lab.xml_utils import (
   xml_from_string_with_recover
 )
 
+from sciencebeam_lab.utils.stopwatch import (
+  StopWatchRecorder
+)
+
 from sciencebeam_lab.beam_utils.utils import (
   TransformAndLog,
   MapOrLog
@@ -140,24 +144,47 @@ def read_pdf_and_convert_to_lxml(path):
     '-blocks -noImageInline -noImage -fullFontName'.split()
   )
 
-def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
+def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping, name=None):
+  stop_watch_recorder = StopWatchRecorder()
+
+  stop_watch_recorder.start('parse lxml')
   lxml_root = etree.fromstring(lxml_content)
+
   # use a more lenient way to parse xml as xml errors are not uncomment
+  stop_watch_recorder.start('parse xml')
   xml_root = xml_from_string_with_recover(xml_content)
+
+  stop_watch_recorder.start('extract target annotations')
   target_annotations = xml_root_to_target_annotations(
     xml_root,
     xml_mapping
   )
+  stop_watch_recorder.stop()
+
   annotators = DEFAULT_ANNOTATORS + [MatchingAnnotator(
     target_annotations
   )]
   annotator = Annotator(annotators)
+
+  stop_watch_recorder.start('convert to svg')
   svg_roots = list(iter_svg_pages_for_lxml(lxml_root))
+
+  stop_watch_recorder.start('annotate svg')
   annotator.annotate(SvgStructuredDocument(svg_roots))
+
+  stop_watch_recorder.start('add visualisation')
   svg_roots = [
     visualize_svg_annotations(svg_root)
     for svg_root in svg_roots
   ]
+  stop_watch_recorder.stop()
+
+  get_logger().info(
+    'processed: name=%s, lxml size=%s, xml size=%s, timings=%s',
+    name, format(len(lxml_content), ','), format(len(xml_content), ','),
+    stop_watch_recorder
+  )
+
   return svg_roots
 
 def relative_path(base_path, path):
@@ -257,7 +284,8 @@ def configure_pipeline(p, opt):
       'source_filename': v['source_filename'],
       'xml_filename': v['xml_filename'],
       'svg_pages': list(convert_and_annotate_lxml_content(
-        v['lxml_content'], v['xml_content'], xml_mapping
+        v['lxml_content'], v['xml_content'], xml_mapping,
+        name=v['source_filename']
       ))
     }, log_fn=lambda e, v: (
       get_logger().warning(
