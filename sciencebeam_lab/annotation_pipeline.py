@@ -47,6 +47,10 @@ from sciencebeam_lab.annotator import (
   DEFAULT_ANNOTATORS
 )
 
+from sciencebeam_lab.alignment.align import (
+  native_enabled as align_native_enabled
+)
+
 from sciencebeam_lab.matching_annotator import (
   MatchingAnnotator,
   parse_xml_mapping,
@@ -180,9 +184,9 @@ def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping, na
   stop_watch_recorder.stop()
 
   get_logger().info(
-    'processed: name=%s, lxml size=%s, xml size=%s, timings=%s',
+    'processed: name=%s, lxml size=%s, xml size=%s, timings=[%s] (native align impl=%s)',
     name, format(len(lxml_content), ','), format(len(xml_content), ','),
-    stop_watch_recorder
+    stop_watch_recorder, align_native_enabled
   )
 
   return svg_roots
