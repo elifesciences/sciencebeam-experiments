@@ -59,6 +59,10 @@ from sciencebeam_lab.annotation_evaluation import (
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
+from sciencebeam_lab.pdf2xml.pdf2xml_wrapper import (
+  PdfToXmlWrapper
+)
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -129,6 +133,13 @@ def read_all_from_path(path):
       out.write(buf)
     return out.getvalue()
 
+def read_pdf_and_convert_to_lxml(path):
+  pdf_content = read_all_from_path(path)
+  return PdfToXmlWrapper().process_input(
+    pdf_content,
+    '-blocks -noImageInline -noImage -fullFontName'.split()
+  )
+
 def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping):
   lxml_root = etree.fromstring(lxml_content)
   # use a more lenient way to parse xml as xml errors are not uncomment
@@ -188,35 +199,70 @@ def save_svg_roots(output_filename, svg_pages):
 
 def configure_pipeline(p, opt):
   xml_mapping = parse_xml_mapping(opt.xml_mapping_path)
+  if opt.lxml_path:
+    source_path = opt.lxml_path
+    lxml_xml_file_pairs = (
+      p |
+      beam.Create([[
+        join_if_relative_path(opt.base_data_path, s)
+        for s in [opt.lxml_path, opt.xml_path]
+      ]]) |
+      "FindFilePairs" >> TransformAndLog(
+        beam.FlatMap(
+          lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
+        ),
+        log_prefix='file pairs: ',
+        log_level='debug'
+      ) |
+      "ReadFileContent" >> beam.Map(lambda filenames: {
+        'source_filename': filenames[0],
+        'xml_filename': filenames[1],
+        'lxml_content': read_all_from_path(filenames[0]),
+        'xml_content': read_all_from_path(filenames[1])
+      })
+    )
+  elif opt.pdf_path:
+    source_path = opt.pdf_path
+    lxml_xml_file_pairs = (
+      p |
+      beam.Create([[
+        join_if_relative_path(opt.base_data_path, s)
+        for s in [opt.pdf_path, opt.xml_path]
+      ]]) |
+      "FindFilePairs" >> TransformAndLog(
+        beam.FlatMap(
+          lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
+        ),
+        log_prefix='file pairs: ',
+        log_level='debug'
+      ) |
+      "ReadFileContentAndConvertPdfToLxml" >> MapOrLog(lambda filenames: {
+        'source_filename': filenames[0],
+        'xml_filename': filenames[1],
+        'lxml_content': read_pdf_and_convert_to_lxml(filenames[0]),
+        'xml_content': read_all_from_path(filenames[1])
+      }, log_fn=lambda e, filenames: (
+        get_logger().warning(
+          'caucht exception (ignoring item): %s, pdf: %s, xml: %s',
+          e, filenames[0], filenames[1]
+        )
+      ))
+    )
+  else:
+    raise RuntimeError('either lxml-path or pdf-path required')
+
   annotation_results = (
-    p |
-    beam.Create([[
-      join_if_relative_path(opt.base_data_path, s)
-      for s in [opt.lxml_path, opt.xml_path]
-    ]]) |
-    "FindFilePairs" >> TransformAndLog(
-      beam.FlatMap(
-        lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
-      ),
-      log_prefix='file pairs: ',
-      log_level='debug'
-    ) |
-    "ReadFileContent" >> beam.Map(lambda filenames: {
-      'lxml_filename': filenames[0],
-      'xml_filename': filenames[1],
-      'lxml_content': read_all_from_path(filenames[0]),
-      'xml_content': read_all_from_path(filenames[1])
-    }) |
+    lxml_xml_file_pairs |
     "ConvertAndAnnotate" >> MapOrLog(lambda v: {
-      'lxml_filename': v['lxml_filename'],
+      'source_filename': v['source_filename'],
       'xml_filename': v['xml_filename'],
       'svg_pages': list(convert_and_annotate_lxml_content(
         v['lxml_content'], v['xml_content'], xml_mapping
       ))
     }, log_fn=lambda e, v: (
       get_logger().warning(
-        'caucht exception (ignoring item): %s, lxml: %s, xml: %s',
-        e, v['lxml_filename'], v['xml_filename']
+        'caucht exception (ignoring item): %s, source: %s, xml: %s',
+        e, v['source_filename'], v['xml_filename']
       )
     ))
   )
@@ -224,12 +270,12 @@ def configure_pipeline(p, opt):
     annotation_results |
     "SaveOutput" >> TransformAndLog(
       beam.Map(lambda v: {
-        'lxml_filename': v['lxml_filename'],
+        'source_filename': v['source_filename'],
         'xml_filename': v['xml_filename'],
         'output_filename': save_svg_roots(
           output_path_for_data_path(
             opt.base_data_path,
-            opt.lxml_path,
+            source_path,
             opt.output_path
           ),
           v['svg_pages']
@@ -246,7 +292,7 @@ def configure_pipeline(p, opt):
       annotation_results |
       "EvaluateAnnotations" >> TransformAndLog(
         beam.Map(lambda v: {
-          'lxml_filename': v['lxml_filename'],
+          'source_filename': v['source_filename'],
           'xml_filename': v['xml_filename'],
           'annotation_evaluation': evaluate_document_by_page(
             SvgStructuredDocument(v['svg_pages'])
@@ -257,7 +303,7 @@ def configure_pipeline(p, opt):
       "FlattenAnotationEvaluationResults" >> beam.FlatMap(
         lambda v: to_annotation_evaluation_csv_dict_rows(
           v['annotation_evaluation'],
-          document=basename(v['lxml_filename'])
+          document=basename(v['source_filename'])
         )
       ) |
       "WriteAnnotationEvaluationToCsv" >> WriteDictCsv(
@@ -306,8 +352,12 @@ def parse_args(argv=None):
     help='base data path'
   )
   parser.add_argument(
-    '--lxml-path', type=str, required=True,
+    '--lxml-path', type=str, required=False,
     help='path to lxml file(s)'
+  )
+  parser.add_argument(
+    '--pdf-path', type=str, required=False,
+    help='path to pdf file(s) (alternative to lxml)'
   )
   parser.add_argument(
     '--xml-path', type=str, required=True,
