@@ -225,11 +225,13 @@ def mkdirs_if_not_exists(path):
       if not FileSystems.exists(path):
         raise
 
-def output_path_for_data_path(base_data_path, data_path, output_path):
-  return FileSystems.join(
-    output_path,
-    relative_path(base_data_path, data_path).replace('.lxml', '.svg.zip')
-  )
+def change_ext(path, old_ext, new_ext):
+  if old_ext is None:
+    old_ext = os.path.splitext(path)[1]
+  if old_ext and path.endswith(old_ext):
+    return path[:-len(old_ext)] + new_ext
+  else:
+    return path + new_ext
 
 def save_svg_roots(output_filename, svg_pages):
   mkdirs_if_not_exists(dirname(output_filename))
@@ -242,10 +244,16 @@ def save_svg_roots(output_filename, svg_pages):
         zf.writestr(svg_page_filename, data)
     return output_filename
 
+def save_file_content(output_filename, data):
+  mkdirs_if_not_exists(dirname(output_filename))
+  # Note: FileSystems.create transparently handles compression based on the file extension
+  with FileSystems.create(output_filename) as f:
+    f.write(data)
+  return output_filename
+
 def configure_pipeline(p, opt):
   xml_mapping = parse_xml_mapping(opt.xml_mapping_path)
   if opt.lxml_path:
-    source_path = opt.lxml_path
     lxml_xml_file_pairs = (
       p |
       beam.Create([[
@@ -267,7 +275,6 @@ def configure_pipeline(p, opt):
       })
     )
   elif opt.pdf_path:
-    source_path = opt.pdf_path
     lxml_xml_file_pairs = (
       p |
       beam.Create([[
@@ -296,6 +303,28 @@ def configure_pipeline(p, opt):
   else:
     raise RuntimeError('either lxml-path or pdf-path required')
 
+  if opt.save_lxml:
+    _ = (
+      lxml_xml_file_pairs |
+      "SaveLxml" >> TransformAndLog(
+        beam.Map(lambda v: {
+          'source_filename': v['source_filename'],
+          'xml_filename': v['xml_filename'],
+          'output_filename': save_file_content(
+            FileSystems.join(
+              opt.output_path,
+              change_ext(
+                relative_path(opt.base_data_path, v['source_filename']),
+                None, '.lxml.gz'
+              )
+            ),
+            v['lxml_content']
+          )
+        }),
+        log_fn=lambda x: get_logger().info('saved lxml: %s', x['output_filename'])
+      )
+    )
+
   annotation_results = (
     lxml_xml_file_pairs |
     "ConvertAndAnnotate" >> MapOrLog(lambda v: {
@@ -319,15 +348,17 @@ def configure_pipeline(p, opt):
         'source_filename': v['source_filename'],
         'xml_filename': v['xml_filename'],
         'output_filename': save_svg_roots(
-          output_path_for_data_path(
-            opt.base_data_path,
-            source_path,
-            opt.output_path
+          FileSystems.join(
+            opt.output_path,
+            change_ext(
+              relative_path(opt.base_data_path, v['source_filename']),
+              None, '.svg.zip'
+            )
           ),
           v['svg_pages']
         )
       }),
-      log_fn=lambda x: get_logger().info('saved result: %s', x)
+      log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
     )
   )
   if opt.annotation_evaluation_csv:
@@ -391,8 +422,7 @@ def get_default_job_name():
   timestamp_str = strftime("%Y%m%d-%H%M%S", gmtime())
   return 'sciencebeam-lab-%s-%s' % (getuser(), timestamp_str)
 
-def parse_args(argv=None):
-  parser = argparse.ArgumentParser()
+def add_main_args(parser):
   parser.add_argument(
     '--data-path', type=str, required=True,
     help='base data path'
@@ -406,6 +436,11 @@ def parse_args(argv=None):
   source_group.add_argument(
     '--pdf-path', type=str, required=False,
     help='path to pdf file(s) (alternative to lxml)'
+  )
+
+  parser.add_argument(
+    '--save-lxml', default=False, action='store_true',
+    help='save generated lxml (if using pdf as an input)'
   )
 
   parser.add_argument(
@@ -424,16 +459,30 @@ def parse_args(argv=None):
     '--output-path', required=False,
     help='Output directory to write results to.'
   )
+
+def process_main_args(parser, parsed_args):
+  parsed_args.base_data_path = parsed_args.data_path.replace('/*/', '/')
+
+  if not parsed_args.output_path:
+    parsed_args.output_path = os.path.join(
+      os.path.dirname(parsed_args.base_data_path),
+      os.path.basename(parsed_args.base_data_path + '-results')
+    )
+
+  if parsed_args.save_lxml and not parsed_args.pdf_path:
+    parser.error('--save-lxml only valid with --pdf-path')
+
+def add_cloud_args(parser):
+  parser.add_argument(
+    '--cloud',
+    default=False,
+    action='store_true'
+  )
   parser.add_argument(
     '--runner',
     required=False,
     default=None,
     help='Runner.'
-  )
-  parser.add_argument(
-    '--cloud',
-    default=False,
-    action='store_true'
   )
   parser.add_argument(
     '--project',
@@ -450,16 +499,8 @@ def parse_args(argv=None):
     '--job_name', type=str, required=False,
     help='The name of the cloud job'
   )
-  # parsed_args, other_args = parser.parse_known_args(argv)
-  parsed_args = parser.parse_args(argv)
 
-  parsed_args.base_data_path = parsed_args.data_path.replace('/*/', '/')
-
-  if not parsed_args.output_path:
-    parsed_args.output_path = os.path.join(
-      os.path.dirname(parsed_args.base_data_path),
-      os.path.basename(parsed_args.base_data_path + '-results')
-    )
+def process_cloud_args(parsed_args, output_path):
   if parsed_args.num_workers:
     parsed_args.autoscaling_algorithm = 'NONE'
     parsed_args.max_num_workers = parsed_args.num_workers
@@ -471,7 +512,7 @@ def parse_args(argv=None):
       'project':
         get_cloud_project(),
       'temp_location':
-        os.path.join(os.path.dirname(parsed_args.output_path), 'temp'),
+        os.path.join(os.path.dirname(output_path), 'temp'),
       'runner':
         'DataflowRunner',
       'save_main_session':
@@ -489,6 +530,18 @@ def parse_args(argv=None):
   for kk, vv in default_values.iteritems():
     if kk not in parsed_args or not vars(parsed_args)[kk]:
       vars(parsed_args)[kk] = vv
+
+def parse_args(argv=None):
+  parser = argparse.ArgumentParser()
+  add_main_args(parser)
+  add_cloud_args(parser)
+
+  # parsed_args, other_args = parser.parse_known_args(argv)
+  parsed_args = parser.parse_args(argv)
+
+  process_main_args(parser, parsed_args)
+  process_cloud_args(parsed_args, parsed_args.output_path)
+
   get_logger().info('parsed_args: %s', parsed_args)
 
   return parsed_args
