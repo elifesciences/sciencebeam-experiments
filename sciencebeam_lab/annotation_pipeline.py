@@ -2,8 +2,6 @@ from __future__ import absolute_import
 
 import argparse
 import os
-import subprocess
-import errno
 import logging
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -14,7 +12,6 @@ from lxml import etree
 
 import apache_beam as beam
 from apache_beam.io.filesystems import FileSystems
-from apache_beam.io.textio import WriteToText
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 
 from sciencebeam_lab.xml_utils import (
@@ -32,6 +29,11 @@ from sciencebeam_lab.beam_utils.utils import (
 
 from sciencebeam_lab.beam_utils.csv import (
   WriteDictCsv
+)
+
+from sciencebeam_lab.beam_utils.main import (
+  add_cloud_args,
+  process_cloud_args
 )
 
 from sciencebeam_lab.lxml_to_svg import (
@@ -79,10 +81,6 @@ def dirname(path):
 
 def basename(path):
   return FileSystems.split(path)[1]
-
-def create_fn_api_runner():
-  from apache_beam.runners.portability.fn_api_runner import FnApiRunner
-  return FnApiRunner()
 
 def find_matching_filenames(pattern):
   return [x.path for x in FileSystems.match([pattern])[0].metadata_list]
@@ -390,38 +388,6 @@ def configure_pipeline(p, opt):
       )
     )
 
-def get_cloud_project():
-  cmd = [
-    'gcloud', '-q', 'config', 'list', 'project',
-    '--format=value(core.project)'
-  ]
-  with open(os.devnull, 'w') as dev_null:
-    try:
-      res = subprocess.check_output(cmd, stderr=dev_null).strip()
-      if not res:
-        raise Exception(
-          '--cloud specified but no Google Cloud Platform '
-          'project found.\n'
-          'Please specify your project name with the --project '
-          'flag or set a default project: '
-          'gcloud config set project YOUR_PROJECT_NAME'
-        )
-      return res
-    except OSError as e:
-      if e.errno == errno.ENOENT:
-        raise Exception(
-          'gcloud is not installed. The Google Cloud SDK is '
-          'necessary to communicate with the Cloud ML service. '
-          'Please install and set up gcloud.'
-        )
-      raise
-
-def get_default_job_name():
-  from getpass import getuser
-  from time import gmtime, strftime
-  timestamp_str = strftime("%Y%m%d-%H%M%S", gmtime())
-  return 'sciencebeam-lab-%s-%s' % (getuser(), timestamp_str)
-
 def add_main_args(parser):
   parser.add_argument(
     '--data-path', type=str, required=True,
@@ -472,65 +438,6 @@ def process_main_args(parser, parsed_args):
   if parsed_args.save_lxml and not parsed_args.pdf_path:
     parser.error('--save-lxml only valid with --pdf-path')
 
-def add_cloud_args(parser):
-  parser.add_argument(
-    '--cloud',
-    default=False,
-    action='store_true'
-  )
-  parser.add_argument(
-    '--runner',
-    required=False,
-    default=None,
-    help='Runner.'
-  )
-  parser.add_argument(
-    '--project',
-    type=str,
-    help='The cloud project name to be used for running this pipeline'
-  )
-  parser.add_argument(
-    '--num_workers',
-    default=10,
-    type=int,
-    help='The number of workers.'
-  )
-  parser.add_argument(
-    '--job_name', type=str, required=False,
-    help='The name of the cloud job'
-  )
-
-def process_cloud_args(parsed_args, output_path):
-  if parsed_args.num_workers:
-    parsed_args.autoscaling_algorithm = 'NONE'
-    parsed_args.max_num_workers = parsed_args.num_workers
-  parsed_args.setup_file = './setup.py'
-
-  if parsed_args.cloud:
-    # Flags which need to be set for cloud runs.
-    default_values = {
-      'project':
-        get_cloud_project(),
-      'temp_location':
-        os.path.join(os.path.dirname(output_path), 'temp'),
-      'runner':
-        'DataflowRunner',
-      'save_main_session':
-        True,
-    }
-    if not parsed_args.job_name:
-      parsed_args.job_name = get_default_job_name()
-  else:
-    # Flags which need to be set for local runs.
-    default_values = {
-      'runner': 'DirectRunner',
-    }
-
-  get_logger().info('default_values: %s', default_values)
-  for kk, vv in default_values.iteritems():
-    if kk not in parsed_args or not vars(parsed_args)[kk]:
-      vars(parsed_args)[kk] = vv
-
 def parse_args(argv=None):
   parser = argparse.ArgumentParser()
   add_main_args(parser)
@@ -540,7 +447,10 @@ def parse_args(argv=None):
   parsed_args = parser.parse_args(argv)
 
   process_main_args(parser, parsed_args)
-  process_cloud_args(parsed_args, parsed_args.output_path)
+  process_cloud_args(
+    parsed_args, parsed_args.output_path,
+    name='sciencbeam-lab'
+  )
 
   get_logger().info('parsed_args: %s', parsed_args)
 
@@ -555,11 +465,7 @@ def run(argv=None):
   pipeline_options = PipelineOptions.from_dictionary(vars(known_args))
   pipeline_options.view_as(SetupOptions).save_main_session = True
 
-  runner = known_args.runner
-  if runner == 'FnApiRunner':
-    runner = create_fn_api_runner()
-
-  with beam.Pipeline(runner, options=pipeline_options) as p:
+  with beam.Pipeline(known_args.runner, options=pipeline_options) as p:
     configure_pipeline(p, known_args)
 
     # Execute the pipeline and wait until it is completed.
