@@ -3,7 +3,8 @@ from lxml.builder import E
 from sciencebeam_lab.svg_structured_document import (
   SVG_TEXT,
   SVG_G,
-  SVG_DOC
+  SVG_DOC,
+  SVG_NS
 )
 
 from sciencebeam_lab.lxml_to_svg import (
@@ -82,6 +83,21 @@ class TestIterSvgPagesForLxml(object):
     svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
     assert len(svg_pages) == 1
     assert svg_pages[0].attrib.get('viewBox') == '0 0 600 800'
+
+  def test_should_add_background_rect(self):
+    lxml_root = E.DOCUMENT(
+      E.PAGE(
+        width='600',
+        height='800'
+      )
+    )
+    svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
+    assert len(svg_pages) == 1
+    background_rect = svg_pages[0].xpath(
+      'svg:rect[@class="background"]',
+      namespaces={'svg': SVG_NS}
+    )
+    assert len(background_rect) == 1
 
   def test_should_create_text_node_with_common_attributes(self):
     lxml_root = E.DOCUMENT(

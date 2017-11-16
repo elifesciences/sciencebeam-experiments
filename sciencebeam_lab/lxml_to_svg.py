@@ -32,6 +32,7 @@ from sciencebeam_lab.annotation_evaluation import (
 from sciencebeam_lab.svg_structured_document import (
   SVG_TEXT,
   SVG_G,
+  SVG_RECT,
   SVG_DOC,
   SVG_NSMAP,
   SvgStyleClasses
@@ -100,7 +101,7 @@ def parse_args(argv=None):
   args = parser.parse_args(argv)
   return args
 
-def iter_svg_pages_for_lxml(lxml_root):
+def iter_svg_pages_for_lxml(lxml_root, add_background=True):
   previous_block = None
   previous_svg_block = None
   for page in lxml_root.xpath('//DOCUMENT/PAGE'):
@@ -109,6 +110,13 @@ def iter_svg_pages_for_lxml(lxml_root):
     page_height = page.attrib.get('height')
     if page_width and page_height:
       svg_root.attrib['viewBox'] = '0 0 %s %s' % (page_width, page_height)
+    if add_background:
+      svg_root.append(_create_xml_node(SVG_RECT, None, attrib={
+        'width': '100%',
+        'height': '100%',
+        'fill': 'white',
+        'class': 'background'
+      }))
     for text in page.xpath('.//TEXT'):
       svg_g = etree.Element(SVG_G, nsmap=SVG_NSMAP, attrib={
         'class': SvgStyleClasses.LINE

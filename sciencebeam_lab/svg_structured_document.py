@@ -7,6 +7,7 @@ SVG_NS_PREFIX = '{' + SVG_NS + '}'
 SVG_DOC = SVG_NS_PREFIX + 'svg'
 SVG_TEXT = SVG_NS_PREFIX + 'text'
 SVG_G = SVG_NS_PREFIX + 'g'
+SVG_RECT = SVG_NS_PREFIX + 'rect'
 
 SVG_TAG_ATTRIB = 'class'
 
