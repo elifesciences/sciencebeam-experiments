@@ -85,9 +85,10 @@ class PdfToXmlWrapper(object):
 
   def get_pdf2xml_executable_path(self):
     self.unzip_pdf2xml_zip_if_target_directory_does_not_exist()
+    # use pdftoxml_server as it already handles timeouts
     return os.path.join(
       self.target_directory,
-      'lin-64/pdftoxml'
+      'lin-64/pdftoxml_server'
     )
 
   def process_input(self, source_data, args):
