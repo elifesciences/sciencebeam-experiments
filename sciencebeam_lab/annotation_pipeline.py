@@ -383,14 +383,17 @@ def parse_args(argv=None):
     '--data-path', type=str, required=True,
     help='base data path'
   )
-  parser.add_argument(
+
+  source_group = parser.add_mutually_exclusive_group(required=True)
+  source_group.add_argument(
     '--lxml-path', type=str, required=False,
     help='path to lxml file(s)'
   )
-  parser.add_argument(
+  source_group.add_argument(
     '--pdf-path', type=str, required=False,
     help='path to pdf file(s) (alternative to lxml)'
   )
+
   parser.add_argument(
     '--xml-path', type=str, required=True,
     help='path to xml file(s)'
