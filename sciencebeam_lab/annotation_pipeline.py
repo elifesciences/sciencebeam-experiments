@@ -142,11 +142,25 @@ def read_all_from_path(path):
     return out.getvalue()
 
 def read_pdf_and_convert_to_lxml(path):
+  stop_watch_recorder = StopWatchRecorder()
+
+  stop_watch_recorder.start('read contents')
   pdf_content = read_all_from_path(path)
-  return PdfToXmlWrapper().process_input(
+
+  stop_watch_recorder.start('convert to lxml')
+  lxml_content = PdfToXmlWrapper().process_input(
     pdf_content,
     '-blocks -noImageInline -noImage -fullFontName'.split()
   )
+  stop_watch_recorder.stop()
+
+  get_logger().info(
+    'converted to lxml: path=%s, pdf size=%s, lxml size=%s, timings=[%s]',
+    path, format(len(pdf_content), ','), format(len(lxml_content), ','),
+    stop_watch_recorder
+  )
+
+  return lxml_content
 
 def convert_and_annotate_lxml_content(lxml_content, xml_content, xml_mapping, name=None):
   stop_watch_recorder = StopWatchRecorder()
