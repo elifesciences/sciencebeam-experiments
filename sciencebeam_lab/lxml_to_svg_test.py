@@ -72,6 +72,17 @@ class TestIterSvgPagesForLxml(object):
     svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
     assert len(svg_pages) == 3
 
+  def test_should_set_svg_dimensions(self):
+    lxml_root = E.DOCUMENT(
+      E.PAGE(
+        width='600',
+        height='800'
+      )
+    )
+    svg_pages = list(iter_svg_pages_for_lxml(lxml_root))
+    assert len(svg_pages) == 1
+    assert svg_pages[0].attrib.get('viewBox') == '0 0 600 800'
+
   def test_should_create_text_node_with_common_attributes(self):
     lxml_root = E.DOCUMENT(
       E.PAGE(

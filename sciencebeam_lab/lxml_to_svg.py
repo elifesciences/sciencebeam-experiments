@@ -105,6 +105,10 @@ def iter_svg_pages_for_lxml(lxml_root):
   previous_svg_block = None
   for page in lxml_root.xpath('//DOCUMENT/PAGE'):
     svg_root = etree.Element(SVG_DOC, nsmap=SVG_NSMAP)
+    page_width = page.attrib.get('width')
+    page_height = page.attrib.get('height')
+    if page_width and page_height:
+      svg_root.attrib['viewBox'] = '0 0 %s %s' % (page_width, page_height)
     for text in page.xpath('.//TEXT'):
       svg_g = etree.Element(SVG_G, nsmap=SVG_NSMAP, attrib={
         'class': SvgStyleClasses.LINE
