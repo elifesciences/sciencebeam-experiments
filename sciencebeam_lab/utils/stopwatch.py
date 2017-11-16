@@ -39,7 +39,8 @@ class StopWatchRecorder(object):
     self.started = name
 
   def __str__(self):
+    total = ('total', sum(elapsed for _, elapsed in self.recorded_timings))
     return ', '.join(
       '%s: %.6fs' % (name, elapsed)
-      for name, elapsed in self.recorded_timings
+      for name, elapsed in self.recorded_timings + [total]
     )
