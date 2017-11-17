@@ -7,7 +7,10 @@ from sciencebeam_lab.utils.bounding_box import (
 from sciencebeam_lab.svg_structured_document import (
   SvgStructuredDocument,
   SvgStyleClasses,
-  SVG_NS
+  SVG_NS,
+  SVGE_BOUNDING_BOX,
+  format_bounding_box,
+  parse_bounding_box
 )
 
 E = ElementMaker(namespace=SVG_NS)
@@ -101,3 +104,25 @@ class TestSvgStructuredDocument(object):
     })
     doc = SvgStructuredDocument(E.svg(SVG_TEXT_LINE(text)))
     assert doc.get_bounding_box(text) is None
+
+  def test_should_use_bounding_box_if_available(self):
+    bounding_box = BoundingBox(11, 12, 101, 102)
+    text = SVG_TEXT('a', {
+      'x': '10',
+      'y': '11',
+      'font-size': '100',
+      SVGE_BOUNDING_BOX: format_bounding_box(bounding_box)
+    })
+    doc = SvgStructuredDocument(E.svg(SVG_TEXT_LINE(text)))
+    assert doc.get_bounding_box(text) == bounding_box
+
+  def test_should_be_able_to_set_bounding_box(self):
+    bounding_box = BoundingBox(11, 12, 101, 102)
+    text = SVG_TEXT('a', {
+      'x': '10',
+      'y': '11',
+      'font-size': '100'
+    })
+    doc = SvgStructuredDocument(E.svg(SVG_TEXT_LINE(text)))
+    doc.set_bounding_box(text, bounding_box)
+    assert text.attrib[SVGE_BOUNDING_BOX] == format_bounding_box(bounding_box)

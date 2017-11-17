@@ -15,8 +15,14 @@ SVG_RECT = SVG_NS_PREFIX + 'rect'
 
 SVG_TAG_ATTRIB = 'class'
 
+SVGE_NS = 'http://www.elifesciences.org/schema/svge'
+SVGE_NS_PREFIX = '{' + SVGE_NS + '}'
+SVGE_BOUNDING_BOX = SVGE_NS_PREFIX + 'bounding-box'
+
+
 SVG_NSMAP = {
-  None : SVG_NS
+  None : SVG_NS,
+  'svge': SVGE_NS
 }
 
 class SvgStyleClasses(object):
@@ -24,8 +30,19 @@ class SvgStyleClasses(object):
   BLOCK = 'block'
   LINE_NO = 'line_no'
 
+def format_bounding_box(bounding_box):
+  return '%s %s %s %s' % (bounding_box.x, bounding_box.y, bounding_box.width, bounding_box.height)
+
+def parse_bounding_box(bounding_box_str):
+  if not bounding_box_str:
+    return None
+  x, y, width, height = bounding_box_str.split()
+  return BoundingBox(float(x), float(y), float(width), float(height))
+
 def get_node_bounding_box(t):
   attrib = t.attrib
+  if SVGE_BOUNDING_BOX in attrib:
+    return parse_bounding_box(attrib[SVGE_BOUNDING_BOX])
   if not ('font-size' in attrib and 'x' in attrib and 'y' in attrib):
     return None
   font_size = float(attrib['font-size'])
@@ -69,4 +86,4 @@ class SvgStructuredDocument(AbstractStructuredDocument):
     return get_node_bounding_box(parent)
 
   def set_bounding_box(self, parent, bounding_box):
-    raise RuntimeError('not implemented')
+    parent.attrib[SVGE_BOUNDING_BOX] = format_bounding_box(bounding_box)

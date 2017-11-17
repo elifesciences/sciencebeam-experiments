@@ -43,4 +43,7 @@ class LxmlStructuredDocument(AbstractStructuredDocument):
     return get_node_bounding_box(parent)
 
   def set_bounding_box(self, parent, bounding_box):
-    raise RuntimeError('not implemented')
+    parent.attrib['x'] = str(bounding_box.x)
+    parent.attrib['y'] = str(bounding_box.y)
+    parent.attrib['width'] = str(bounding_box.width)
+    parent.attrib['height'] = str(bounding_box.height)

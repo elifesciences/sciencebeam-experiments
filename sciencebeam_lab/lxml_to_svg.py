@@ -4,6 +4,10 @@ import os
 
 from lxml import etree
 
+from sciencebeam_lab.utils.bounding_box import (
+  BoundingBox
+)
+
 from sciencebeam_lab.utils.csv_utils import (
   open_csv_output,
   write_dict_csv
@@ -33,7 +37,9 @@ from sciencebeam_lab.svg_structured_document import (
   SVG_RECT,
   SVG_DOC,
   SVG_NSMAP,
-  SvgStyleClasses
+  SVGE_BOUNDING_BOX,
+  SvgStyleClasses,
+  format_bounding_box as svg_format_bounding_box
 )
 
 from sciencebeam_lab.svg_structured_document import (
@@ -119,6 +125,7 @@ def iter_svg_pages_for_lxml(lxml_root, add_background=True):
         x = float(token.attrib.get('x'))
         y = float(token.attrib.get('y'))
         height = float(token.attrib.get('height'))
+        width = float(token.attrib.get('width'))
         base = float(token.attrib.get('base', y))
         y_center = y + height / 2.0
         attrib = {
@@ -126,7 +133,10 @@ def iter_svg_pages_for_lxml(lxml_root, add_background=True):
           'y': str(base),
           'font-size': token.attrib.get('font-size'),
           'font-family': token.attrib.get('font-name'),
-          'fill': token.attrib.get('font-color')
+          'fill': token.attrib.get('font-color'),
+          SVGE_BOUNDING_BOX: svg_format_bounding_box(BoundingBox(
+            x, y, width, height
+          ))
         }
         angle = float(token.attrib.get('angle', '0'))
         if token.attrib.get('rotation') == '1' and angle == 90.0:

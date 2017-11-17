@@ -1,10 +1,16 @@
 from lxml.builder import E
 
+from sciencebeam_lab.utils.bounding_box import (
+  BoundingBox
+)
+
 from sciencebeam_lab.svg_structured_document import (
   SVG_TEXT,
   SVG_G,
   SVG_DOC,
-  SVG_NS
+  SVG_NS,
+  SVGE_BOUNDING_BOX,
+  parse_bounding_box
 )
 
 from sciencebeam_lab.lxml_to_svg import (
@@ -15,6 +21,7 @@ SOME_TEXT = "some text"
 SOME_X = "10"
 SOME_Y = "20"
 SOME_BASE = "25"
+SOME_WIDTH = "31"
 SOME_HEIGHT = "30"
 SOME_FONT_SIZE = "40"
 SOME_FONT_FAMILY = "Fontastic"
@@ -24,6 +31,7 @@ class LXML(object):
   X = 'x'
   Y = 'y'
   BASE = 'base'
+  WIDTH = 'width'
   HEIGHT = 'height'
   FONT_SIZE = 'font-size'
   FONT_NAME = 'font-name'
@@ -36,10 +44,12 @@ class SVG(object):
   FONT_SIZE = 'font-size'
   FONT_FAMILY = 'font-family'
   FILL = 'fill'
+  BOUNDING_BOX = SVGE_BOUNDING_BOX
 
 COMMON_LXML_TOKEN_ATTRIBS = {
   LXML.X: SOME_X,
   LXML.Y: SOME_Y,
+  LXML.WIDTH: SOME_WIDTH,
   LXML.HEIGHT: SOME_HEIGHT,
   LXML.FONT_SIZE: SOME_FONT_SIZE,
   LXML.FONT_NAME: SOME_FONT_FAMILY,
@@ -121,6 +131,12 @@ class TestIterSvgPagesForLxml(object):
     assert float(svg_text.attrib[SVG.FONT_SIZE]) == float(SOME_FONT_SIZE)
     assert svg_text.attrib[SVG.FONT_FAMILY] == SOME_FONT_FAMILY
     assert svg_text.attrib[SVG.FILL] == SOME_FONT_COLOR
+    assert parse_bounding_box(svg_text.attrib.get(SVG.BOUNDING_BOX)) == BoundingBox(
+      float(COMMON_LXML_TOKEN_ATTRIBS[LXML.X]),
+      float(COMMON_LXML_TOKEN_ATTRIBS[LXML.Y]),
+      float(COMMON_LXML_TOKEN_ATTRIBS[LXML.WIDTH]),
+      float(COMMON_LXML_TOKEN_ATTRIBS[LXML.HEIGHT])
+    )
 
   def test_should_use_base_as_y_in_svg_if_available(self):
     lxml_root = E.DOCUMENT(

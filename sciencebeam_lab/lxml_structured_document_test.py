@@ -80,3 +80,15 @@ class TestLxmlStructuredDocument(object):
     })
     doc = LxmlStructuredDocument(E.DOCUMENT(E.PAGE(E.TEXT(token))))
     assert doc.get_bounding_box(token) == BoundingBox(10, 11, 100, 101)
+
+  def test_should_be_able_to_set_bounding_box(self):
+    bounding_box = BoundingBox(10, 11, 100, 101)
+    token = E.TOKEN({
+      'x': '20',
+      'y': '21',
+      'width': '200',
+      'height': '201'
+    })
+    doc = LxmlStructuredDocument(E.DOCUMENT(E.PAGE(E.TEXT(token))))
+    doc.set_bounding_box(token, bounding_box)
+    assert doc.get_bounding_box(token) == bounding_box

@@ -27,6 +27,12 @@ class TestBoundingBox(object):
   def test_should_not_equal_bounding_boxes_with_different_height(self):
     assert BoundingBox(11, 12, 101, 102) != BoundingBox(11, 12, 101, 999)
 
+  def test_should_not_equal_none(self):
+    assert BoundingBox(11, 12, 101, 102) != None
+
+  def test_should_not_equal_to_none(self):
+    assert None != BoundingBox(11, 12, 101, 102)
+
   def test_should_include_another_bounding_box_to_the_bottom_right(self):
     assert (
       BoundingBox(10, 20, 50, 100).include(BoundingBox(100, 100, 200, 200)) ==

@@ -87,6 +87,7 @@ class BoundingBox(object):
 
   def __eq__(self, other):
     return (
+      other is not None and
       self.x == other.x and
       self.y == other.y and
       self.width == other.width and
