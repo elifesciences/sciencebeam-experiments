@@ -2,8 +2,6 @@ import argparse
 import logging
 import os
 
-from six import text_type
-
 from lxml import etree
 
 from sciencebeam_lab.utils.csv_utils import (
@@ -49,13 +47,9 @@ from sciencebeam_lab.visualize_svg_annotation import (
 def get_logger():
   return logging.getLogger(__name__)
 
-def _create_xml_node(tag, text=None, attrib=None):
-  node = etree.Element(tag)
-  if text is not None:
-    node.text = text
-  if attrib is not None:
-    for k, v in attrib.items():
-      node.attrib[k] = text_type(v)
+def ElementWithText(tag, text, **kwargs):
+  node = etree.Element(tag, **kwargs)
+  node.text = text
   return node
 
 def svg_pattern_for_lxml_path(lxml_path):
@@ -111,7 +105,7 @@ def iter_svg_pages_for_lxml(lxml_root, add_background=True):
     if page_width and page_height:
       svg_root.attrib['viewBox'] = '0 0 %s %s' % (page_width, page_height)
     if add_background:
-      svg_root.append(_create_xml_node(SVG_RECT, None, attrib={
+      svg_root.append(etree.Element(SVG_RECT, attrib={
         'width': '100%',
         'height': '100%',
         'fill': 'white',
@@ -128,8 +122,8 @@ def iter_svg_pages_for_lxml(lxml_root, add_background=True):
         base = float(token.attrib.get('base', y))
         y_center = y + height / 2.0
         attrib = {
-          'x': x,
-          'y': base,
+          'x': str(x),
+          'y': str(base),
           'font-size': token.attrib.get('font-size'),
           'font-family': token.attrib.get('font-name'),
           'fill': token.attrib.get('font-color')
@@ -139,12 +133,12 @@ def iter_svg_pages_for_lxml(lxml_root, add_background=True):
           attrib['x'] = '0'
           attrib['y'] = '0'
           attrib['transform'] = 'translate({x} {y}) rotate({angle})'.format(
-            x=x,
-            y=y_center,
-            angle=-angle
+            x=str(x),
+            y=str(y_center),
+            angle=str(-angle)
           )
         svg_g.append(
-          _create_xml_node(SVG_TEXT, token.text, attrib=attrib)
+          ElementWithText(SVG_TEXT, token.text, attrib=attrib)
         )
       text_parent = text.getparent()
       if text_parent.tag == 'BLOCK':
