@@ -31,18 +31,33 @@ class AbstractStructuredDocument(object, with_metaclass(ABCMeta)):
   def set_tag(self, parent, tag):
     pass
 
+  @abstractmethod
+  def get_bounding_box(self, parent):
+    pass
+
+  @abstractmethod
+  def set_bounding_box(self, parent, bounding_box):
+    pass
+
 class SimpleToken(object):
   def __init__(self, text, attrib=None):
     self.text = text
     if attrib is None:
       attrib = {}
     self.attrib = attrib
+    self._bounding_box = None
 
   def get_x(self):
     return self.attrib.get('x')
 
   def get_y(self):
     return self.attrib.get('y')
+
+  def get_bounding_box(self):
+    return self._bounding_box
+
+  def set_bounding_box(self, bounding_box):
+    self._bounding_box = bounding_box
 
   def get_tag(self):
     return self.attrib.get('tag')
@@ -90,3 +105,9 @@ class SimpleStructuredDocument(AbstractStructuredDocument):
 
   def set_tag(self, parent, tag):
     return parent.set_tag(tag)
+
+  def get_bounding_box(self, parent):
+    return parent.get_bounding_box()
+
+  def set_bounding_box(self, parent, bounding_box):
+    parent.set_bounding_box(bounding_box)

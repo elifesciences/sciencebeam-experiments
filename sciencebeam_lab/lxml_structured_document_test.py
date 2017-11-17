@@ -1,5 +1,9 @@
 from lxml.builder import E
 
+from sciencebeam_lab.utils.bounding_box import (
+  BoundingBox
+)
+
 from sciencebeam_lab.lxml_structured_document import (
   LxmlStructuredDocument
 )
@@ -66,3 +70,13 @@ class TestLxmlStructuredDocument(object):
       )
     )
     assert list(doc.get_tokens_of_line(line)) == tokens
+
+  def test_should_calculate_default_bounding_box(self):
+    token = E.TOKEN({
+      'x': '10',
+      'y': '11',
+      'width': '100',
+      'height': '101'
+    })
+    doc = LxmlStructuredDocument(E.DOCUMENT(E.PAGE(E.TEXT(token))))
+    assert doc.get_bounding_box(token) == BoundingBox(10, 11, 100, 101)

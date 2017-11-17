@@ -15,3 +15,20 @@ def remove_key_from_dict(d, key):
 
 def extract_from_dict(d, key, default_value=None):
   return d.get(key, default_value), remove_key_from_dict(d, key)
+
+def extend_dict(d, *other_dicts):
+  """
+  example:
+
+  extend_dict(d1, d2)
+
+  is equivalent to Python 3 syntax:
+  {
+    **d1,
+    **d2
+  }
+  """
+  d = d.copy()
+  for other_dict in other_dicts:
+    d.update(other_dict)
+  return d

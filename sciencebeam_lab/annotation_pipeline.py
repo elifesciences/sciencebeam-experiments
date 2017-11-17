@@ -63,6 +63,17 @@ from sciencebeam_lab.visualize_svg_annotation import (
   visualize_svg_annotations
 )
 
+from sciencebeam_lab.color_map import (
+  parse_color_map_from_file
+)
+
+from sciencebeam_lab.blockify_annotations import (
+  annotation_document_page_to_annotation_blocks,
+  merge_blocks,
+  expand_blocks,
+  annotated_blocks_to_image
+)
+
 from sciencebeam_lab.annotation_evaluation import (
   evaluate_document_by_page,
   DEFAULT_EVALUATION_COLUMNS,
@@ -242,6 +253,38 @@ def save_svg_roots(output_filename, svg_pages):
         zf.writestr(svg_page_filename, data)
     return output_filename
 
+def save_block_pngs(output_filename, svg_pages, color_map):
+  mkdirs_if_not_exists(dirname(output_filename))
+  with FileSystems.create(output_filename) as f:
+    with ZipFile(f, 'w', compression=ZIP_DEFLATED) as zf:
+      for i, svg_page in enumerate(svg_pages):
+        page_filename = 'page-%s.png' % (1 + i)
+        get_logger().debug('page_filename: %s', page_filename)
+        structured_document = SvgStructuredDocument(svg_page)
+        blocks = expand_blocks(
+          merge_blocks(
+            annotation_document_page_to_annotation_blocks(
+              structured_document,
+              structured_document.get_pages()[0]
+            )
+          )
+        )
+        viewbox = svg_page.attrib.get('viewBox')
+        if not viewbox:
+          raise RuntimeError(
+            'viewbox missing on svg, available attributes: %s' % svg_page.attrib.keys()
+          )
+        _, _, width, height = viewbox.split()
+        image = annotated_blocks_to_image(
+          blocks, color_map,
+          width=int(width), height=int(height), background='white'
+        )
+        out = BytesIO()
+        image.save(out, 'png')
+        data = out.getvalue()
+        zf.writestr(page_filename, data)
+    return output_filename
+
 def save_file_content(output_filename, data):
   mkdirs_if_not_exists(dirname(output_filename))
   # Note: FileSystems.create transparently handles compression based on the file extension
@@ -339,6 +382,7 @@ def configure_pipeline(p, opt):
       )
     ))
   )
+
   _ = (
     annotation_results |
     "SaveOutput" >> TransformAndLog(
@@ -359,6 +403,31 @@ def configure_pipeline(p, opt):
       log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
     )
   )
+
+  if opt.save_block_png:
+    color_map = parse_color_map_from_file(opt.color_map)
+    _ = (
+      annotation_results |
+      "SaveBlockPng" >> TransformAndLog(
+        beam.Map(lambda v: {
+          'source_filename': v['source_filename'],
+          'xml_filename': v['xml_filename'],
+          'output_filename': save_block_pngs(
+            FileSystems.join(
+              opt.output_path,
+              change_ext(
+                relative_path(opt.base_data_path, v['source_filename']),
+                None, '.block-png.zip'
+              )
+            ),
+            v['svg_pages'],
+            color_map
+          )
+        }),
+        log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
+      )
+    )
+
   if opt.annotation_evaluation_csv:
     annotation_evaluation_csv_name, annotation_evaluation_ext = (
       os.path.splitext(opt.annotation_evaluation_csv)
@@ -407,6 +476,15 @@ def add_main_args(parser):
   parser.add_argument(
     '--save-lxml', default=False, action='store_true',
     help='save generated lxml (if using pdf as an input)'
+  )
+
+  parser.add_argument(
+    '--save-block-png', default=False, action='store_true',
+    help='save blockified version of the svg as a png'
+  )
+  parser.add_argument(
+    '--color-map', default='color_map.conf',
+    help='color map to use (see save-block-png)'
   )
 
   parser.add_argument(

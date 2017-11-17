@@ -1,2 +1,4 @@
-lxml==3.6.4
 fuzzywuzzy==0.15.1
+lxml==3.6.4
+Pillow==4.3.0
+pyqtree-0.24
