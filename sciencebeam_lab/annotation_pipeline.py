@@ -18,6 +18,10 @@ from sciencebeam_lab.xml_utils import (
   xml_from_string_with_recover
 )
 
+from sciencebeam_lab.utils.svg import (
+  SvgToPngConverter
+)
+
 from sciencebeam_lab.utils.stopwatch import (
   StopWatchRecorder
 )
@@ -242,6 +246,18 @@ def save_svg_roots(output_filename, svg_pages):
         zf.writestr(svg_page_filename, data)
     return output_filename
 
+def save_svg_roots_as_png(output_filename, svg_pages):
+  mkdirs_if_not_exists(dirname(output_filename))
+  with FileSystems.create(output_filename) as f:
+    with ZipFile(f, 'w', compression=ZIP_DEFLATED) as zf:
+      for i, svg_page in enumerate(svg_pages):
+        page_filename = 'page-%s.png' % (1 + i)
+        get_logger().debug('page_filename: %s', page_filename)
+        svg_bytes = etree.tostring(svg_page)
+        data = SvgToPngConverter().svg_to_png_bytes(svg_bytes)
+        zf.writestr(page_filename, data)
+    return output_filename
+
 def save_file_content(output_filename, data):
   mkdirs_if_not_exists(dirname(output_filename))
   # Note: FileSystems.create transparently handles compression based on the file extension
@@ -339,6 +355,29 @@ def configure_pipeline(p, opt):
       )
     ))
   )
+
+  if opt.save_as_png:
+    _ = (
+      annotation_results |
+      "SavePng" >> TransformAndLog(
+        beam.Map(lambda v: {
+          'source_filename': v['source_filename'],
+          'xml_filename': v['xml_filename'],
+          'output_filename': save_svg_roots_as_png(
+            FileSystems.join(
+              opt.output_path,
+              change_ext(
+                relative_path(opt.base_data_path, v['source_filename']),
+                None, '.png.zip'
+              )
+            ),
+            v['svg_pages']
+          )
+        }),
+        log_fn=lambda x: get_logger().info('saved png images: %s', x['output_filename'])
+      )
+    )
+
   _ = (
     annotation_results |
     "SaveOutput" >> TransformAndLog(
@@ -359,6 +398,7 @@ def configure_pipeline(p, opt):
       log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
     )
   )
+
   if opt.annotation_evaluation_csv:
     annotation_evaluation_csv_name, annotation_evaluation_ext = (
       os.path.splitext(opt.annotation_evaluation_csv)
@@ -407,6 +447,11 @@ def add_main_args(parser):
   parser.add_argument(
     '--save-lxml', default=False, action='store_true',
     help='save generated lxml (if using pdf as an input)'
+  )
+
+  parser.add_argument(
+    '--save-as-png', default=False, action='store_true',
+    help='save svg as png images'
   )
 
   parser.add_argument(

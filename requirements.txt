@@ -1,2 +1,5 @@
-lxml==3.6.4
+CairoSVG==1.0.22
+cssselect==1.0.1
 fuzzywuzzy==0.15.1
+lxml==3.6.4
+tinycss==0.4
