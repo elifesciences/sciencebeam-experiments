@@ -13,6 +13,15 @@ def strip_all(list_of_strings):
 def remove_key_from_dict(d, key):
   return {k: v for k, v in iteritems(d) if k != key}
 
+def remove_keys_from_dict(d, keys_to_remove):
+  if not keys_to_remove:
+    return d
+  return {
+    k: v
+    for k, v in iteritems(d)
+    if k not in keys_to_remove
+  }
+
 def extract_from_dict(d, key, default_value=None):
   return d.get(key, default_value), remove_key_from_dict(d, key)
 

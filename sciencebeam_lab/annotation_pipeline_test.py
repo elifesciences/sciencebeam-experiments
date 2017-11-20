@@ -40,5 +40,13 @@ class TestParseArgs(object):
 
   def test_should_not_raise_error_if_both_image_width_and_height_are_specified(self):
     parse_args([
-      '--data-path=test', '--pdf-path=test', '--xml-path=test', '--image-width=100', '--image-height=100'
+      '--data-path=test', '--pdf-path=test', '--xml-path=test',
+      '--image-width=100', '--image-height=100'
     ])
+
+  def test_should_raise_error_if_save_tfrecords_specified_without_pdf_path(self):
+    with pytest.raises(SystemExit):
+      parse_args(['--data-path=test', '--lxml-path=test', '--xml-path=test', '--save-tfrecords'])
+
+  def test_should_not_raise_error_if_save_tfrecords_specified_with_pdf_path(self):
+    parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test', '--save-tfrecords'])

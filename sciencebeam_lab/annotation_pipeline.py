@@ -18,6 +18,11 @@ from sciencebeam_lab.xml_utils import (
   xml_from_string_with_recover
 )
 
+from sciencebeam_lab.collection_utils import (
+  extend_dict,
+  remove_keys_from_dict
+)
+
 from sciencebeam_lab.utils.stopwatch import (
   StopWatchRecorder
 )
@@ -256,12 +261,12 @@ def save_svg_roots(output_filename, svg_pages):
     for svg_page in svg_pages
   ))
 
-def save_pdf_pngs(output_filename, pdf_bytes, dpi, image_size):
+def pdf_bytes_to_png_pages(pdf_bytes, dpi, image_size):
   pdf_to_png = PdfToPng(dpi=dpi, image_size=image_size)
-  return save_pages(output_filename, '.png', (
+  return (
     fp.read()
     for fp in pdf_to_png.iter_pdf_bytes_to_png_fp(pdf_bytes)
-  ))
+  )
 
 def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   structured_document = SvgStructuredDocument(svg_page)
@@ -287,12 +292,6 @@ def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   out = BytesIO()
   image.save(out, 'png')
   return out.getvalue()
-
-def save_block_pngs(output_filename, svg_pages, color_map, image_size=None):
-  return save_pages(output_filename, '.png', (
-    svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=image_size)
-    for svg_page in svg_pages
-  ))
 
 def save_file_content(output_filename, data):
   mkdirs_if_not_exists(dirname(output_filename))
@@ -353,26 +352,44 @@ def configure_pipeline(p, opt):
 
     lxml_xml_file_pairs = (
       pdf_xml_file_pairs |
-      "ConvertPdfToLxml" >> MapOrLog(lambda v: {
-        'source_filename': v['source_filename'],
-        'xml_filename': v['xml_filename'],
-        'lxml_content': convert_pdf_bytes_to_lxml(
-          v['pdf_content'], path=v['source_filename']
-        ),
-        'xml_content': v['xml_content']
-      }, log_fn=lambda e, v: (
+      "ConvertPdfToLxml" >> MapOrLog(lambda v: remove_keys_from_dict(
+        extend_dict(v, {
+          'lxml_content': convert_pdf_bytes_to_lxml(
+            v['pdf_content'], path=v['source_filename']
+          )
+        }),
+        # we don't need the pdf_content unless we are writing tf_records
+        None if opt.save_tfrecords else {'pdf_content'}
+      ), log_fn=lambda e, v: (
         get_logger().warning(
           'caught exception (ignoring item): %s, pdf: %s, xml: %s',
           e, v['source_filename'], v['xml_filename'], exc_info=e
         )
       ))
     )
+  else:
+    raise RuntimeError('either lxml-path or pdf-path required')
+
+  if opt.save_png or opt.save_tfrecords:
+    with_pdf_png_pages = (
+      (lxml_xml_file_pairs if opt.save_tfrecords else pdf_xml_file_pairs) |
+      "ConvertPdfToPng" >> MapOrLog(lambda v: remove_keys_from_dict(
+        extend_dict(v, {
+          'pdf_png_pages':  list(pdf_bytes_to_png_pages(
+            v['pdf_content'],
+            dpi=opt.png_dpi,
+            image_size=image_size
+          ))
+        }),
+        {'pdf_content'} # we no longer need the pdf_content
+      ))
+    )
 
     if opt.save_png:
       _ = (
-        pdf_xml_file_pairs |
-        "ConvertPdfToPng" >> TransformAndLog(
-          MapOrLog(lambda v: save_pdf_pngs(
+        with_pdf_png_pages |
+        "SavePdfToPng" >> TransformAndLog(
+          beam.Map(lambda v: save_pages(
             FileSystems.join(
               opt.output_path,
               change_ext(
@@ -380,48 +397,43 @@ def configure_pipeline(p, opt):
                 None, '.png.zip'
               )
             ),
-            v['pdf_content'],
-            dpi=opt.png_dpi,
-            image_size=image_size
+            '.png',
+            v['pdf_png_pages']
           )),
           log_fn=lambda x: get_logger().info('saved result: %s', x)
         )
       )
-  else:
-    raise RuntimeError('either lxml-path or pdf-path required')
 
   if opt.save_lxml:
     _ = (
       lxml_xml_file_pairs |
       "SaveLxml" >> TransformAndLog(
-        beam.Map(lambda v: {
-          'source_filename': v['source_filename'],
-          'xml_filename': v['xml_filename'],
-          'output_filename': save_file_content(
-            FileSystems.join(
-              opt.output_path,
-              change_ext(
-                relative_path(opt.base_data_path, v['source_filename']),
-                None, '.lxml.gz'
-              )
-            ),
-            v['lxml_content']
-          )
-        }),
-        log_fn=lambda x: get_logger().info('saved lxml: %s', x['output_filename'])
+        beam.Map(lambda v: save_file_content(
+          FileSystems.join(
+            opt.output_path,
+            change_ext(
+              relative_path(opt.base_data_path, v['source_filename']),
+              None, '.lxml.gz'
+            )
+          ),
+          v['lxml_content']
+        )),
+        log_fn=lambda x: get_logger().info('saved lxml: %s', x)
       )
     )
 
   annotation_results = (
-    lxml_xml_file_pairs |
-    "ConvertAndAnnotate" >> MapOrLog(lambda v: {
-      'source_filename': v['source_filename'],
-      'xml_filename': v['xml_filename'],
-      'svg_pages': list(convert_and_annotate_lxml_content(
-        v['lxml_content'], v['xml_content'], xml_mapping,
-        name=v['source_filename']
-      ))
-    }, log_fn=lambda e, v: (
+    (with_pdf_png_pages if opt.save_tfrecords else lxml_xml_file_pairs) |
+    "ConvertAndAnnotate" >> MapOrLog(lambda v: remove_keys_from_dict(
+      extend_dict(v, {
+        'svg_pages': list(convert_and_annotate_lxml_content(
+          v['lxml_content'], v['xml_content'], xml_mapping,
+          name=v['source_filename']
+        ))
+      }),
+      # Won't need the XML anymore
+      {'lxml_content', 'xml_content'}
+    ), log_fn=lambda e, v: (
       get_logger().warning(
         'caught exception (ignoring item): %s, source: %s, xml: %s',
         e, v['source_filename'], v['xml_filename'], exc_info=e
@@ -432,33 +444,40 @@ def configure_pipeline(p, opt):
   _ = (
     annotation_results |
     "SaveOutput" >> TransformAndLog(
-      beam.Map(lambda v: {
-        'source_filename': v['source_filename'],
-        'xml_filename': v['xml_filename'],
-        'output_filename': save_svg_roots(
-          FileSystems.join(
-            opt.output_path,
-            change_ext(
-              relative_path(opt.base_data_path, v['source_filename']),
-              None, '.svg.zip'
-            )
-          ),
-          v['svg_pages']
-        )
-      }),
-      log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
+      beam.Map(lambda v: save_svg_roots(
+        FileSystems.join(
+          opt.output_path,
+          change_ext(
+            relative_path(opt.base_data_path, v['source_filename']),
+            None, '.svg.zip'
+          )
+        ),
+        v['svg_pages']
+      )),
+      log_fn=lambda x: get_logger().info('saved result: %s', x)
     )
   )
 
-  if opt.save_block_png:
+  if opt.save_block_png or opt.save_tfrecords:
     color_map = parse_color_map_from_file(opt.color_map)
-    _ = (
+    with_block_png_pages = (
       annotation_results |
-      "SaveBlockPng" >> TransformAndLog(
-        beam.Map(lambda v: {
-          'source_filename': v['source_filename'],
-          'xml_filename': v['xml_filename'],
-          'output_filename': save_block_pngs(
+      "GenerateBlockPng" >> beam.Map(lambda v: remove_keys_from_dict(
+        extend_dict(v, {
+          'block_png_pages': [
+            svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=image_size)
+            for svg_page in v['svg_pages']
+          ]
+        }),
+        {'svg_pages'}
+      ))
+    )
+
+    if opt.save_block_png:
+      _ = (
+        with_block_png_pages |
+        "SaveBlockPng" >> TransformAndLog(
+          beam.Map(lambda v: save_pages(
             FileSystems.join(
               opt.output_path,
               change_ext(
@@ -466,14 +485,48 @@ def configure_pipeline(p, opt):
                 None, '.block-png.zip'
               )
             ),
-            v['svg_pages'],
-            color_map,
-            image_size=image_size
-          )
-        }),
-        log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
+            '.png',
+            v['block_png_pages']
+          )),
+          log_fn=lambda x: get_logger().info('saved result: %s', x)
+        )
       )
-    )
+
+    if opt.save_tfrecords:
+      import tensorflow as tf
+
+      def _bytes_feature(value, name=None):
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+
+      def convert_to_example(input_uri, input_image, annotation_uri, annotation_image):
+        input_uri_bytes = _bytes_feature(input_uri.encode('utf-8'))
+        input_image_bytes = _bytes_feature(input_image)
+        annotation_uri_bytes = _bytes_feature(annotation_uri.encode('utf-8'))
+        annotation_image_bytes = _bytes_feature(annotation_image)
+        return tf.train.Example(features=tf.train.Features(feature={
+          'input_uri': input_uri_bytes,
+          'input_image': input_image_bytes,
+          'annotation_uri': annotation_uri_bytes,
+          'annotation_image': annotation_image_bytes
+        }))
+
+      _ = (
+        with_block_png_pages |
+        'ConvertToTfExamples' >> beam.FlatMap(lambda v: [
+          convert_to_example(
+            input_uri=v['source_filename'],
+            input_image=pdf_png_page,
+            annotation_uri=v['source_filename'] + '.annot',
+            annotation_image=block_png_page
+          )
+          for pdf_png_page, block_png_page in zip(v['pdf_png_pages'], v['block_png_pages'])
+        ]) |
+        'SerializeToString' >> beam.Map(lambda x: x.SerializeToString()) |
+        'SaveToTfRecords' >> beam.io.WriteToTFRecord(
+          FileSystems.join(opt.output_path, 'data'),
+          file_name_suffix='.tfrecord.gz'
+        )
+      )
 
   if opt.annotation_evaluation_csv:
     annotation_evaluation_csv_name, annotation_evaluation_ext = (
@@ -560,6 +613,13 @@ def add_main_args(parser):
     '--xml-mapping-path', type=str, default='annot-xml-front.conf',
     help='path to xml mapping file'
   )
+
+  parser.add_argument(
+    '--save-tfrecords', default=False, action='store_true',
+    help='Save TFRecords with PDF PNG and Annotation PNG'
+    ' (--image-width and --image-height recommended)'
+  )
+
   parser.add_argument(
     '--annotation-evaluation-csv', type=str, required=False,
     help='Annotation evaluation CSV output file'
@@ -583,6 +643,9 @@ def process_main_args(parser, parsed_args):
 
   if parsed_args.save_png and not parsed_args.pdf_path:
     parser.error('--save-png only valid with --pdf-path')
+
+  if parsed_args.save_tfrecords and not parsed_args.pdf_path:
+    parser.error('--save-tfrecords only valid with --pdf-path')
 
   if sum(1 if x else 0 for x in (parsed_args.image_width, parsed_args.image_height)) == 1:
     parser.error('--image-width and --image-height need to be specified together')
