@@ -17,7 +17,10 @@ def MapSpy(f):
 def MapOrLog(fn, log_fn=None):
   if log_fn is None:
     log_fn = lambda e, x: (
-      get_logger().warning('caucht exception (ignoring item): %s, input: %.100s...', e, x)
+      get_logger().warning(
+        'caught exception (ignoring item): %s, input: %.100s...',
+        e, x, exc_info=e
+      )
     )
   def wrapper(x):
     try:

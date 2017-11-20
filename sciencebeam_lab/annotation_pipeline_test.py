@@ -25,3 +25,7 @@ class TestParseArgs(object):
   def test_should_raise_error_if_save_lxml_specified_without_pdf_path(self):
     with pytest.raises(SystemExit):
       parse_args(['--data-path=test', '--lxml-path=test', '--save-lxml', '--xml-path=test'])
+
+  def test_should_raise_error_if_save_png_is_specified_without_pdf_path(self):
+    with pytest.raises(SystemExit):
+      parse_args(['--data-path=test', '--lxml-path=test', '--save-png', '--xml-path=test'])

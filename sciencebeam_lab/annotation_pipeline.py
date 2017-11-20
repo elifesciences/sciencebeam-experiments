@@ -80,8 +80,9 @@ from sciencebeam_lab.annotation_evaluation import (
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
-from sciencebeam_lab.pdf.pdf_to_lxml_wrapper import (
-  PdfToLxmlWrapper
+from sciencebeam_lab.pdf import (
+  PdfToLxmlWrapper,
+  PdfToPng
 )
 
 def get_logger():
@@ -150,11 +151,8 @@ def read_all_from_path(path):
       out.write(buf)
     return out.getvalue()
 
-def read_pdf_and_convert_to_lxml(path):
+def convert_pdf_bytes_to_lxml(pdf_content, path=None):
   stop_watch_recorder = StopWatchRecorder()
-
-  stop_watch_recorder.start('read contents')
-  pdf_content = read_all_from_path(path)
 
   stop_watch_recorder.start('convert to lxml')
   lxml_content = PdfToLxmlWrapper().process_input(
@@ -242,48 +240,58 @@ def change_ext(path, old_ext, new_ext):
   else:
     return path + new_ext
 
-def save_svg_roots(output_filename, svg_pages):
+def save_pages(output_filename, ext, bytes_by_page):
   mkdirs_if_not_exists(dirname(output_filename))
   with FileSystems.create(output_filename) as f:
     with ZipFile(f, 'w', compression=ZIP_DEFLATED) as zf:
-      for i, svg_page in enumerate(svg_pages):
-        svg_page_filename = 'page-%s.svg' % (1 + i)
-        get_logger().debug('svg_page_filename: %s', svg_page_filename)
-        data = etree.tostring(svg_page)
-        zf.writestr(svg_page_filename, data)
-    return output_filename
-
-def save_block_pngs(output_filename, svg_pages, color_map):
-  mkdirs_if_not_exists(dirname(output_filename))
-  with FileSystems.create(output_filename) as f:
-    with ZipFile(f, 'w', compression=ZIP_DEFLATED) as zf:
-      for i, svg_page in enumerate(svg_pages):
-        page_filename = 'page-%s.png' % (1 + i)
+      for i, data in enumerate(bytes_by_page):
+        page_filename = 'page-%s%s' % (1 + i, ext)
         get_logger().debug('page_filename: %s', page_filename)
-        structured_document = SvgStructuredDocument(svg_page)
-        blocks = expand_blocks(
-          merge_blocks(
-            annotation_document_page_to_annotation_blocks(
-              structured_document,
-              structured_document.get_pages()[0]
-            )
-          )
-        )
-        viewbox = svg_page.attrib.get('viewBox')
-        if not viewbox:
-          raise RuntimeError(
-            'viewbox missing on svg, available attributes: %s' % svg_page.attrib.keys()
-          )
-        _, _, width, height = viewbox.split()
-        image = annotated_blocks_to_image(
-          blocks, color_map,
-          width=int(width), height=int(height), background='white'
-        )
-        out = BytesIO()
-        image.save(out, 'png')
-        data = out.getvalue()
         zf.writestr(page_filename, data)
     return output_filename
+
+def save_svg_roots(output_filename, svg_pages):
+  return save_pages(output_filename, '.svg', (
+    etree.tostring(svg_page)
+    for svg_page in svg_pages
+  ))
+
+def save_pdf_pngs(output_filename, pdf_bytes, dpi):
+  pdf_to_png = PdfToPng(dpi=dpi)
+  return save_pages(output_filename, '.png', (
+    fp.read()
+    for fp in pdf_to_png.iter_pdf_bytes_to_png_fp(pdf_bytes)
+  ))
+
+def svg_page_to_blockified_png_bytes(svg_page, color_map):
+  structured_document = SvgStructuredDocument(svg_page)
+  blocks = expand_blocks(
+    merge_blocks(
+      annotation_document_page_to_annotation_blocks(
+        structured_document,
+        structured_document.get_pages()[0]
+      )
+    )
+  )
+  viewbox = svg_page.attrib.get('viewBox')
+  if not viewbox:
+    raise RuntimeError(
+      'viewbox missing on svg, available attributes: %s' % svg_page.attrib.keys()
+    )
+  _, _, width, height = viewbox.split()
+  image = annotated_blocks_to_image(
+    blocks, color_map,
+    width=int(width), height=int(height), background='white'
+  )
+  out = BytesIO()
+  image.save(out, 'png')
+  return out.getvalue()
+
+def save_block_pngs(output_filename, svg_pages, color_map):
+  return save_pages(output_filename, '.png', (
+    svg_page_to_blockified_png_bytes(svg_page, color_map)
+    for svg_page in svg_pages
+  ))
 
 def save_file_content(output_filename, data):
   mkdirs_if_not_exists(dirname(output_filename))
@@ -316,7 +324,7 @@ def configure_pipeline(p, opt):
       })
     )
   elif opt.pdf_path:
-    lxml_xml_file_pairs = (
+    pdf_xml_file_pairs = (
       p |
       beam.Create([[
         join_if_relative_path(opt.base_data_path, s)
@@ -329,18 +337,49 @@ def configure_pipeline(p, opt):
         log_prefix='file pairs: ',
         log_level='debug'
       ) |
-      "ReadFileContentAndConvertPdfToLxml" >> MapOrLog(lambda filenames: {
+      "ReadFileContent" >> beam.Map(lambda filenames: {
         'source_filename': filenames[0],
         'xml_filename': filenames[1],
-        'lxml_content': read_pdf_and_convert_to_lxml(filenames[0]),
+        'pdf_content': read_all_from_path(filenames[0]),
         'xml_content': read_all_from_path(filenames[1])
-      }, log_fn=lambda e, filenames: (
+      })
+    )
+
+    lxml_xml_file_pairs = (
+      pdf_xml_file_pairs |
+      "ConvertPdfToLxml" >> MapOrLog(lambda v: {
+        'source_filename': v['source_filename'],
+        'xml_filename': v['xml_filename'],
+        'lxml_content': convert_pdf_bytes_to_lxml(
+          v['pdf_content'], path=v['source_filename']
+        ),
+        'xml_content': v['xml_content']
+      }, log_fn=lambda e, v: (
         get_logger().warning(
-          'caucht exception (ignoring item): %s, pdf: %s, xml: %s',
-          e, filenames[0], filenames[1]
+          'caught exception (ignoring item): %s, pdf: %s, xml: %s',
+          e, v['source_filename'], v['xml_filename'], exc_info=e
         )
       ))
     )
+
+    if opt.save_png:
+      _ = (
+        pdf_xml_file_pairs |
+        "ConvertPdfToPng" >> TransformAndLog(
+          MapOrLog(lambda v: save_pdf_pngs(
+            FileSystems.join(
+              opt.output_path,
+              change_ext(
+                relative_path(opt.base_data_path, v['source_filename']),
+                None, '.png.zip'
+              )
+            ),
+            v['pdf_content'],
+            dpi=opt.png_dpi
+          )),
+          log_fn=lambda x: get_logger().info('saved result: %s', x)
+        )
+      )
   else:
     raise RuntimeError('either lxml-path or pdf-path required')
 
@@ -377,8 +416,8 @@ def configure_pipeline(p, opt):
       ))
     }, log_fn=lambda e, v: (
       get_logger().warning(
-        'caucht exception (ignoring item): %s, source: %s, xml: %s',
-        e, v['source_filename'], v['xml_filename']
+        'caught exception (ignoring item): %s, source: %s, xml: %s',
+        e, v['source_filename'], v['xml_filename'], exc_info=e
       )
     ))
   )
@@ -479,6 +518,15 @@ def add_main_args(parser):
   )
 
   parser.add_argument(
+    '--save-png', default=False, action='store_true',
+    help='save png pages of the original pdf'
+  )
+  parser.add_argument(
+    '--png-dpi', type=int, default=90,
+    help='dpi of rendered pdf pages'
+  )
+
+  parser.add_argument(
     '--save-block-png', default=False, action='store_true',
     help='save blockified version of the svg as a png'
   )
@@ -515,6 +563,9 @@ def process_main_args(parser, parsed_args):
 
   if parsed_args.save_lxml and not parsed_args.pdf_path:
     parser.error('--save-lxml only valid with --pdf-path')
+
+  if parsed_args.save_png and not parsed_args.pdf_path:
+    parser.error('--save-png only valid with --pdf-path')
 
 def parse_args(argv=None):
   parser = argparse.ArgumentParser()
