@@ -88,7 +88,7 @@ class PdfToLxmlWrapper(object):
     # use pdftoxml_server as it already handles timeouts
     return os.path.join(
       self.target_directory,
-      'lin-64/pdftoxml_server'
+      'lin-64/pdftoxml'
     )
 
   def process_input(self, source_data, args):
@@ -101,8 +101,9 @@ class PdfToLxmlWrapper(object):
   def process_file(self, source_filename, args):
     pdf2xml = self.get_pdf2xml_executable_path()
     get_logger().info('processing %s using %s', source_filename, pdf2xml)
+    cmd = [pdf2xml] + args + [source_filename, '-']
     p = subprocess.Popen(
-      [pdf2xml] + args + [source_filename, '-'],
+      ['timeout', '20s'] + cmd,
       stdout=PIPE,
       stderr=PIPE,
       stdin=None
