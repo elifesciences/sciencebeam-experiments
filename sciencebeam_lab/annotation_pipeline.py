@@ -80,8 +80,8 @@ from sciencebeam_lab.annotation_evaluation import (
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
-from sciencebeam_lab.pdf.pdf2xml_wrapper import (
-  PdfToXmlWrapper
+from sciencebeam_lab.pdf.pdf_to_lxml_wrapper import (
+  PdfToLxmlWrapper
 )
 
 def get_logger():
@@ -157,7 +157,7 @@ def read_pdf_and_convert_to_lxml(path):
   pdf_content = read_all_from_path(path)
 
   stop_watch_recorder.start('convert to lxml')
-  lxml_content = PdfToXmlWrapper().process_input(
+  lxml_content = PdfToLxmlWrapper().process_input(
     pdf_content,
     '-blocks -noImageInline -noImage -fullFontName'.split()
   )

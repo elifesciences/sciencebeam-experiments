@@ -63,7 +63,7 @@ def unzip_if_not_exist(zip_filename, target_directory, ignore_subdirectory=None)
         os.rename(temp_target_directory, target_directory)
   return target_directory
 
-class PdfToXmlWrapper(object):
+class PdfToLxmlWrapper(object):
   def __init__(self):
     temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.temp'))
     self.target_directory = os.path.join(temp_dir, 'pdf2xml')
@@ -138,7 +138,7 @@ if __name__ == '__main__':
   with open(sample_pdf_filename, 'rb') as sample_f:
     sample_pdf_contents = sample_f.read()
   get_logger().info('pdf size: %s bytes', format(len(sample_pdf_contents), ','))
-  process_out = PdfToXmlWrapper().process_input(
+  process_out = PdfToLxmlWrapper().process_input(
     sample_pdf_contents,
     '-blocks -noImageInline -noImage -fullFontName'.split()
   )
