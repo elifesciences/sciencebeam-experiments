@@ -256,14 +256,14 @@ def save_svg_roots(output_filename, svg_pages):
     for svg_page in svg_pages
   ))
 
-def save_pdf_pngs(output_filename, pdf_bytes, dpi):
-  pdf_to_png = PdfToPng(dpi=dpi)
+def save_pdf_pngs(output_filename, pdf_bytes, dpi, image_size):
+  pdf_to_png = PdfToPng(dpi=dpi, image_size=image_size)
   return save_pages(output_filename, '.png', (
     fp.read()
     for fp in pdf_to_png.iter_pdf_bytes_to_png_fp(pdf_bytes)
   ))
 
-def svg_page_to_blockified_png_bytes(svg_page, color_map):
+def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   structured_document = SvgStructuredDocument(svg_page)
   blocks = expand_blocks(
     merge_blocks(
@@ -281,15 +281,16 @@ def svg_page_to_blockified_png_bytes(svg_page, color_map):
   _, _, width, height = viewbox.split()
   image = annotated_blocks_to_image(
     blocks, color_map,
-    width=int(width), height=int(height), background='white'
+    width=int(width), height=int(height), background='white',
+    scale_to_size=image_size
   )
   out = BytesIO()
   image.save(out, 'png')
   return out.getvalue()
 
-def save_block_pngs(output_filename, svg_pages, color_map):
+def save_block_pngs(output_filename, svg_pages, color_map, image_size=None):
   return save_pages(output_filename, '.png', (
-    svg_page_to_blockified_png_bytes(svg_page, color_map)
+    svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=image_size)
     for svg_page in svg_pages
   ))
 
@@ -301,6 +302,11 @@ def save_file_content(output_filename, data):
   return output_filename
 
 def configure_pipeline(p, opt):
+  image_size = (
+    (opt.image_width, opt.image_height)
+    if opt.image_width and opt.image_height
+    else None
+  )
   xml_mapping = parse_xml_mapping(opt.xml_mapping_path)
   if opt.lxml_path:
     lxml_xml_file_pairs = (
@@ -375,7 +381,8 @@ def configure_pipeline(p, opt):
               )
             ),
             v['pdf_content'],
-            dpi=opt.png_dpi
+            dpi=opt.png_dpi,
+            image_size=image_size
           )),
           log_fn=lambda x: get_logger().info('saved result: %s', x)
         )
@@ -460,7 +467,8 @@ def configure_pipeline(p, opt):
               )
             ),
             v['svg_pages'],
-            color_map
+            color_map,
+            image_size=image_size
           )
         }),
         log_fn=lambda x: get_logger().info('saved result: %s', x['output_filename'])
@@ -527,6 +535,15 @@ def add_main_args(parser):
   )
 
   parser.add_argument(
+    '--image-width', type=int, required=False,
+    help='image width of resulting PNGs'
+  )
+  parser.add_argument(
+    '--image-height', type=int, required=False,
+    help='image height of resulting PNGs'
+  )
+
+  parser.add_argument(
     '--save-block-png', default=False, action='store_true',
     help='save blockified version of the svg as a png'
   )
@@ -566,6 +583,9 @@ def process_main_args(parser, parsed_args):
 
   if parsed_args.save_png and not parsed_args.pdf_path:
     parser.error('--save-png only valid with --pdf-path')
+
+  if sum(1 if x else 0 for x in (parsed_args.image_width, parsed_args.image_height)) == 1:
+    parser.error('--image-width and --image-height need to be specified together')
 
 def parse_args(argv=None):
   parser = argparse.ArgumentParser()

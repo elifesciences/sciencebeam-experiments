@@ -261,7 +261,13 @@ def annotated_blocks_to_svg(blocks, color_map, width=None, height=None, backgrou
   annotated_blocks_to_surface(blocks, surface, color_map)
   return surface.svg_root
 
-def annotated_blocks_to_image(blocks, color_map, width=None, height=None, background=None):
+def annotated_blocks_to_image(
+  blocks, color_map, width=None, height=None, background=None,
+  scale_to_size=None):
+
   surface = ImageSurface(width, height, background)
   annotated_blocks_to_surface(blocks, surface, color_map)
-  return surface.image
+  image = surface.image
+  if scale_to_size:
+    image = image.resize(scale_to_size, Image.NEAREST)
+  return image
