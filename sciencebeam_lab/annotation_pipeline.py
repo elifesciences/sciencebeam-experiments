@@ -80,7 +80,7 @@ from sciencebeam_lab.annotation_evaluation import (
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
-from sciencebeam_lab.pdf2xml.pdf2xml_wrapper import (
+from sciencebeam_lab.pdf.pdf2xml_wrapper import (
   PdfToXmlWrapper
 )
 
