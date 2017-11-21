@@ -1,6 +1,6 @@
 from lxml.builder import E
 
-from sciencebeam_lab.xml_utils import (
+from sciencebeam_lab.utils.xml import (
   get_text_content,
   get_immediate_text,
   xml_from_string_with_recover

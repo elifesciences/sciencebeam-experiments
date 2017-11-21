@@ -35,7 +35,7 @@ from sciencebeam_lab.utils.collection import (
   extract_from_dict
 )
 
-from sciencebeam_lab.xml_utils import (
+from sciencebeam_lab.utils.xml import (
   get_text_content,
   get_text_content_list,
   get_immediate_text

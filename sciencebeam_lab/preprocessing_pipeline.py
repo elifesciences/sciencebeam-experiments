@@ -14,7 +14,7 @@ import apache_beam as beam
 from apache_beam.io.filesystems import FileSystems
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 
-from sciencebeam_lab.xml_utils import (
+from sciencebeam_lab.utils.xml import (
   xml_from_string_with_recover
 )
 
