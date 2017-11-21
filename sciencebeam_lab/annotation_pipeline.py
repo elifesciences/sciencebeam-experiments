@@ -495,7 +495,7 @@ def configure_pipeline(p, opt):
     if opt.save_tfrecords:
       import tensorflow as tf
 
-      def _bytes_feature(value, name=None):
+      def _bytes_feature(value):
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
 
       def convert_to_example(input_uri, input_image, annotation_uri, annotation_image):
