@@ -36,6 +36,15 @@ from sciencebeam_lab.beam_utils.csv import (
   WriteDictCsv
 )
 
+from sciencebeam_lab.beam_utils.io import (
+  read_all_from_path,
+  dirname,
+  basename,
+  find_matching_filenames,
+  mkdirs_if_not_exists,
+  save_file_content
+)
+
 from sciencebeam_lab.beam_utils.main import (
   add_cloud_args,
   process_cloud_args
@@ -93,15 +102,6 @@ from sciencebeam_lab.pdf import (
 def get_logger():
   return logging.getLogger(__name__)
 
-def dirname(path):
-  return FileSystems.split(path)[0]
-
-def basename(path):
-  return FileSystems.split(path)[1]
-
-def find_matching_filenames(pattern):
-  return [x.path for x in FileSystems.match([pattern])[0].metadata_list]
-
 def group_files_by_parent_directory(filenames):
   return {
     k: list(v)
@@ -117,7 +117,7 @@ def zip_by_keys(*dict_list):
 
 def find_file_pairs_grouped_by_parent_directory(patterns):
   matching_files_by_pattern = [
-    find_matching_filenames(pattern) for pattern in patterns
+    list(find_matching_filenames(pattern)) for pattern in patterns
   ]
   get_logger().info(
     'found number of files %s',
@@ -144,17 +144,6 @@ def find_file_pairs_grouped_by_parent_directory(patterns):
         'no exclusively matching files found: %s',
         [files for files in files_in_group_by_pattern]
       )
-
-def read_all_from_path(path):
-  buffer_size = 4096 * 1024
-  with FileSystems.open(path) as f:
-    out = BytesIO()
-    while True:
-      buf = f.read(buffer_size)
-      if not buf:
-        break
-      out.write(buf)
-    return out.getvalue()
 
 def convert_pdf_bytes_to_lxml(pdf_content, path=None):
   stop_watch_recorder = StopWatchRecorder()
@@ -228,15 +217,6 @@ def is_relative_path(path):
 def join_if_relative_path(base_path, path):
   return FileSystems.join(base_path, path) if is_relative_path(path) else path
 
-def mkdirs_if_not_exists(path):
-  if not FileSystems.exists(path):
-    try:
-      get_logger().info('attempting to create directory: %s', path)
-      FileSystems.mkdirs(path)
-    except IOError:
-      if not FileSystems.exists(path):
-        raise
-
 def change_ext(path, old_ext, new_ext):
   if old_ext is None:
     old_ext = os.path.splitext(path)[1]
@@ -292,13 +272,6 @@ def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   out = BytesIO()
   image.save(out, 'png')
   return out.getvalue()
-
-def save_file_content(output_filename, data):
-  mkdirs_if_not_exists(dirname(output_filename))
-  # Note: FileSystems.create transparently handles compression based on the file extension
-  with FileSystems.create(output_filename) as f:
-    f.write(data)
-  return output_filename
 
 def configure_pipeline(p, opt):
   image_size = (
