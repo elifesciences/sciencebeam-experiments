@@ -31,19 +31,16 @@ from sciencebeam_lab.annotation_evaluation import (
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SVG_TEXT,
   SVG_G,
   SVG_RECT,
   SVG_DOC,
   SVG_NSMAP,
   SVGE_BOUNDING_BOX,
+  SvgStructuredDocument,
   SvgStyleClasses,
   format_bounding_box as svg_format_bounding_box
-)
-
-from sciencebeam_lab.svg_structured_document import (
-  SvgStructuredDocument
 )
 
 from sciencebeam_lab.visualize_svg_annotation import (

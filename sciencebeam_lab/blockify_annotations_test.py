@@ -10,7 +10,7 @@ from sciencebeam_lab.structured_document import (
   SimpleToken
 )
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SVG_NS
 )
 

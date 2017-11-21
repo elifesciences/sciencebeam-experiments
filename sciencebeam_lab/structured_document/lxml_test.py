@@ -1,10 +1,12 @@
+from __future__ import absolute_import
+
 from lxml.builder import E
 
 from sciencebeam_lab.utils.bounding_box import (
   BoundingBox
 )
 
-from sciencebeam_lab.lxml_structured_document import (
+from sciencebeam_lab.structured_document.lxml import (
   LxmlStructuredDocument
 )
 

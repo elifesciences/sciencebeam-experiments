@@ -4,7 +4,7 @@ from sciencebeam_lab.utils.bounding_box import (
   BoundingBox
 )
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SVG_TEXT,
   SVG_G,
   SVG_DOC,

@@ -54,7 +54,7 @@ from sciencebeam_lab.lxml_to_svg import (
   iter_svg_pages_for_lxml
 )
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SvgStructuredDocument
 )
 

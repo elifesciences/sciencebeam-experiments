@@ -1,16 +1,17 @@
+from __future__ import absolute_import
+
 from lxml.builder import ElementMaker
 
 from sciencebeam_lab.utils.bounding_box import (
   BoundingBox
 )
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SvgStructuredDocument,
   SvgStyleClasses,
   SVG_NS,
   SVGE_BOUNDING_BOX,
-  format_bounding_box,
-  parse_bounding_box
+  format_bounding_box
 )
 
 E = ElementMaker(namespace=SVG_NS)

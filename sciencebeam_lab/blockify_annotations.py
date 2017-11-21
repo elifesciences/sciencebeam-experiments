@@ -8,7 +8,7 @@ from lxml import etree
 from pyqtree import Index as PqtreeIndex
 from PIL import Image, ImageDraw, ImageColor
 
-from sciencebeam_lab.svg_structured_document import (
+from sciencebeam_lab.structured_document.svg import (
   SVG_NSMAP,
   SVG_DOC,
   SVG_RECT,
