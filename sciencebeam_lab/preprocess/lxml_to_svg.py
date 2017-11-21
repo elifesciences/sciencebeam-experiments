@@ -13,19 +13,19 @@ from sciencebeam_lab.utils.csv_utils import (
   write_dict_csv
 )
 
-from sciencebeam_lab.annotator import (
+from sciencebeam_lab.preprocess.annotator import (
   Annotator,
   DEFAULT_ANNOTATORS
 )
 
-from sciencebeam_lab.matching_annotator import (
+from sciencebeam_lab.preprocess.matching_annotator import (
   MatchingAnnotator,
   CsvMatchDetailReporter,
   parse_xml_mapping,
   xml_root_to_target_annotations
 )
 
-from sciencebeam_lab.annotation_evaluation import (
+from sciencebeam_lab.preprocess.annotation_evaluation import (
   evaluate_document_by_page,
   DEFAULT_EVALUATION_COLUMNS,
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
@@ -43,7 +43,7 @@ from sciencebeam_lab.structured_document.svg import (
   format_bounding_box as svg_format_bounding_box
 )
 
-from sciencebeam_lab.visualize_svg_annotation import (
+from sciencebeam_lab.preprocess.visualize_svg_annotation import (
   visualize_svg_annotations
 )
 

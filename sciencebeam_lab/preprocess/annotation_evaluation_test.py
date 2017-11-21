@@ -6,7 +6,7 @@ from sciencebeam_lab.structured_document import (
   SimpleToken
 )
 
-from sciencebeam_lab.annotation_evaluation import (
+from sciencebeam_lab.preprocess.annotation_evaluation import (
   evaluate_document_by_page
 )
 

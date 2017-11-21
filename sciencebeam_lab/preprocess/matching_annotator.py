@@ -41,7 +41,7 @@ from sciencebeam_lab.utils.xml import (
   get_immediate_text
 )
 
-from sciencebeam_lab.annotator import (
+from sciencebeam_lab.preprocess.annotator import (
   AbstractAnnotator
 )
 

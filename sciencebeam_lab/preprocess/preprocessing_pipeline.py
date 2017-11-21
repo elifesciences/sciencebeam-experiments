@@ -37,21 +37,21 @@ from sciencebeam_lab.structured_document.svg import (
   SvgStructuredDocument
 )
 
-from sciencebeam_lab.matching_annotator import (
+from sciencebeam_lab.preprocess.matching_annotator import (
   parse_xml_mapping
 )
 
-from sciencebeam_lab.color_map import (
+from sciencebeam_lab.preprocess.color_map import (
   parse_color_map_from_file
 )
 
-from sciencebeam_lab.annotation_evaluation import (
+from sciencebeam_lab.preprocess.annotation_evaluation import (
   evaluate_document_by_page,
   DEFAULT_EVALUATION_COLUMNS,
   to_csv_dict_rows as to_annotation_evaluation_csv_dict_rows
 )
 
-from sciencebeam_lab.preprocessing_utils import (
+from sciencebeam_lab.preprocess.preprocessing_utils import (
   change_ext,
   relative_path,
   join_if_relative_path,

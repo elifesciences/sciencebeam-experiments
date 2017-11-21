@@ -33,7 +33,7 @@ pdftoxml test.pdf test.lxml
 
 Convert the file to SVG:
 ```bash
-python -m sciencebeam_lab.lxml_to_svg --lxml-path test.lxml
+python -m sciencebeam_lab.preprocess.lxml_to_svg --lxml-path test.lxml
 ```
 
 That will create `test-page1.svg`, `test-page2.svg`, etc.

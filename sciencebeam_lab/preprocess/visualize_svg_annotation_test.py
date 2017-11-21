@@ -9,7 +9,7 @@ from sciencebeam_lab.structured_document.svg import (
   SVG_TAG_ATTRIB
 )
 
-from sciencebeam_lab.visualize_svg_annotation import (
+from sciencebeam_lab.preprocess.visualize_svg_annotation import (
   visualize_svg_annotations,
   style_block_for_tags,
   style_block_for_tag,

@@ -25,7 +25,7 @@ from sciencebeam_lab.beam_utils.io import (
   mkdirs_if_not_exists
 )
 
-from sciencebeam_lab.lxml_to_svg import (
+from sciencebeam_lab.preprocess.lxml_to_svg import (
   iter_svg_pages_for_lxml
 )
 
@@ -33,7 +33,7 @@ from sciencebeam_lab.structured_document.svg import (
   SvgStructuredDocument
 )
 
-from sciencebeam_lab.annotator import (
+from sciencebeam_lab.preprocess.annotator import (
   Annotator,
   DEFAULT_ANNOTATORS
 )
@@ -42,16 +42,16 @@ from sciencebeam_lab.alignment.align import (
   native_enabled as align_native_enabled
 )
 
-from sciencebeam_lab.matching_annotator import (
+from sciencebeam_lab.preprocess.matching_annotator import (
   MatchingAnnotator,
   xml_root_to_target_annotations
 )
 
-from sciencebeam_lab.visualize_svg_annotation import (
+from sciencebeam_lab.preprocess.visualize_svg_annotation import (
   visualize_svg_annotations
 )
 
-from sciencebeam_lab.blockify_annotations import (
+from sciencebeam_lab.preprocess.blockify_annotations import (
   annotation_document_page_to_annotation_blocks,
   merge_blocks,
   expand_blocks,

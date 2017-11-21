@@ -9,7 +9,7 @@ from sciencebeam_lab.structured_document import (
   SimpleToken
 )
 
-from sciencebeam_lab.find_line_number import (
+from sciencebeam_lab.preprocess.find_line_number import (
   find_line_number_tokens
 )
 

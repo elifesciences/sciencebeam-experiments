@@ -1,6 +1,6 @@
 import pytest
 
-from sciencebeam_lab.preprocessing_pipeline import (
+from sciencebeam_lab.preprocess.preprocessing_pipeline import (
   parse_args
 )
 

@@ -13,7 +13,7 @@ from sciencebeam_lab.structured_document.svg import (
   parse_bounding_box
 )
 
-from sciencebeam_lab.lxml_to_svg import (
+from sciencebeam_lab.preprocess.lxml_to_svg import (
   iter_svg_pages_for_lxml
 )
 

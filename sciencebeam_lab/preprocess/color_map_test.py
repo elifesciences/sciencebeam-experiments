@@ -1,6 +1,6 @@
 from six import BytesIO
 
-from sciencebeam_lab.color_map import (
+from sciencebeam_lab.preprocess.color_map import (
   parse_color_map_from_file
 )
 

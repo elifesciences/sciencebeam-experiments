@@ -1,4 +1,4 @@
-from sciencebeam_lab.annotator import (
+from sciencebeam_lab.preprocess.annotator import (
   LineAnnotator
 )
 

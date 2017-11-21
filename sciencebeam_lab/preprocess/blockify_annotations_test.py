@@ -14,7 +14,7 @@ from sciencebeam_lab.structured_document.svg import (
   SVG_NS
 )
 
-from sciencebeam_lab.blockify_annotations import (
+from sciencebeam_lab.preprocess.blockify_annotations import (
   annotation_document_page_to_annotation_blocks,
   annotation_document_page_to_merged_blocks,
   annotated_blocks_to_svg,

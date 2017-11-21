@@ -2,4 +2,4 @@
 
 set -e
 
-python -m sciencebeam_lab.preprocessing_pipeline $@
+python -m sciencebeam_lab.preprocess.preprocessing_pipeline $@
