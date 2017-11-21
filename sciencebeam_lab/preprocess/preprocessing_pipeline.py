@@ -61,7 +61,9 @@ from sciencebeam_lab.preprocess.preprocessing_utils import (
   pdf_bytes_to_png_pages,
   svg_page_to_blockified_png_bytes,
   save_pages,
-  save_svg_roots
+  save_svg_roots,
+  filter_list_props_by_indices,
+  get_page_indices_with_min_annotation_percentage
 )
 
 from sciencebeam_lab.preprocess.preprocessing_transforms import (
@@ -229,10 +231,29 @@ def configure_pipeline(p, opt):
     )
   )
 
+  if opt.annotation_evaluation_csv or opt.min_annotation_percentage:
+    annotation_evaluation_results = (
+      annotation_results |
+      "EvaluateAnnotations" >> TransformAndLog(
+        beam.Map(lambda v: remove_keys_from_dict(
+          extend_dict(v, {
+            'annotation_evaluation': evaluate_document_by_page(
+              SvgStructuredDocument(v['svg_pages'])
+            )
+          }),
+          None if opt.min_annotation_percentage else {'svg_pages'}
+        )),
+        log_fn=lambda x: get_logger().info(
+          'annotation evaluation result: %s: %s',
+          x['source_filename'], x['annotation_evaluation']
+        )
+      )
+    )
+
   if opt.save_block_png or opt.save_tfrecords:
     color_map = parse_color_map_from_file(opt.color_map)
     with_block_png_pages = (
-      annotation_results |
+      (annotation_evaluation_results if opt.min_annotation_percentage else annotation_results) |
       "GenerateBlockPng" >> beam.Map(lambda v: remove_keys_from_dict(
         extend_dict(v, {
           'block_png_pages': [
@@ -264,8 +285,24 @@ def configure_pipeline(p, opt):
       )
 
     if opt.save_tfrecords:
+      if opt.min_annotation_percentage:
+        filtered_pages = (
+          with_block_png_pages |
+          "FilterPages" >> beam.Map(
+            lambda v: filter_list_props_by_indices(
+              v,
+              get_page_indices_with_min_annotation_percentage(
+                v['annotation_evaluation'],
+                opt.min_annotation_percentage
+              ),
+              {'pdf_png_pages', 'block_png_pages'}
+            )
+          )
+        )
+      else:
+        filtered_pages = with_block_png_pages
       _ = (
-        with_block_png_pages |
+        filtered_pages |
         "WriteTFRecords" >> WritePropsToTFRecord(
           FileSystems.join(opt.output_path, 'data'),
           lambda v: (
@@ -285,17 +322,7 @@ def configure_pipeline(p, opt):
       os.path.splitext(opt.annotation_evaluation_csv)
     )
     _ = (
-      annotation_results |
-      "EvaluateAnnotations" >> TransformAndLog(
-        beam.Map(lambda v: {
-          'source_filename': v['source_filename'],
-          'xml_filename': v['xml_filename'],
-          'annotation_evaluation': evaluate_document_by_page(
-            SvgStructuredDocument(v['svg_pages'])
-          )
-        }),
-        log_fn=lambda x: get_logger().info('annotation evaluation result: %s', x)
-      ) |
+      annotation_evaluation_results |
       "FlattenAnotationEvaluationResults" >> beam.FlatMap(
         lambda v: to_annotation_evaluation_csv_dict_rows(
           v['annotation_evaluation'],
@@ -370,6 +397,12 @@ def add_main_args(parser):
     '--save-tfrecords', default=False, action='store_true',
     help='Save TFRecords with PDF PNG and Annotation PNG'
     ' (--image-width and --image-height recommended)'
+  )
+
+  parser.add_argument(
+    '--min-annotation-percentage', type=float, required=False,
+    help='Minimum percentage of annotations per page'
+    ' (pages below that threshold will get dropped)'
   )
 
   parser.add_argument(

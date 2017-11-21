@@ -64,7 +64,8 @@ def patch_preprocessing_pipeline(**kwargs):
     'convert_and_annotate_lxml_content',
     'svg_page_to_blockified_png_bytes',
     'save_svg_roots',
-    'save_pages'
+    'save_pages',
+    'evaluate_document_by_page'
   }
 
   with patch.multiple(
@@ -172,6 +173,47 @@ class TestConfigurePipeline(object):
         'input_image': fake_pdf_png_page(i),
         'annotation_image': fake_block_png_page(i)
       } for i in [1, 2]])
+
+  def test_should_not_write_tfrecord_below_annotation_threshold(self):
+    custom_mocks = dict(
+      evaluate_document_by_page=lambda _: [{
+        'percentage': {
+          # low percentage of None (no annotation, include)
+          None: 0.1
+        }
+      }, {
+        'percentage': {
+          # low percentage of None (no annotation, exclude)
+          None: 0.9
+        }
+      }]
+    )
+    with patch_preprocessing_pipeline(**custom_mocks) as mocks:
+      opt = get_default_args()
+      opt.save_tfrecords = True
+      opt.min_annotation_percentage = 0.5
+      with TestPipeline() as p:
+        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+          (PDF_FILE_1, XML_FILE_1)
+        ]
+        mocks['convert_and_annotate_lxml_content'].return_value = [
+          fake_svg_page(i) for i in [1, 2]
+        ]
+        mocks['pdf_bytes_to_png_pages'].return_value = [
+          fake_pdf_png_page(i) for i in [1, 2]
+        ]
+        mocks['svg_page_to_blockified_png_bytes'].side_effect = [
+          fake_block_png_page(1),
+          fake_block_png_page(2)
+        ]
+        configure_pipeline(p, opt)
+
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
+        'input_uri': PDF_FILE_1,
+        'annotation_uri': PDF_FILE_1 + '.annot',
+        'input_image': fake_pdf_png_page(i),
+        'annotation_image': fake_block_png_page(i)
+      } for i in [1]])
 
 class TestParseArgs(object):
   def test_should_raise_error_without_arguments(self):

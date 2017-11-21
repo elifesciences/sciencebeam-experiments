@@ -7,6 +7,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from itertools import groupby
 from functools import reduce
 
+from six import iteritems
+
 from lxml import etree
 
 from apache_beam.io.filesystems import FileSystems
@@ -237,3 +239,22 @@ def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   out = BytesIO()
   image.save(out, 'png')
   return out.getvalue()
+
+def filter_list_props_by_indices(d, indices, list_props):
+  return {
+    k: (
+      [x for i, x in enumerate(v) if i in indices]
+      if k in list_props
+      else v
+    )
+    for k, v in iteritems(d)
+  }
+
+def get_page_indices_with_min_annotation_percentage(
+  annotation_evaluation, min_annotation_percentage):
+
+  return [
+    i
+    for i, page_evaluation in enumerate(annotation_evaluation)
+    if page_evaluation['percentage'].get(None) <= (1 - min_annotation_percentage)
+  ]
