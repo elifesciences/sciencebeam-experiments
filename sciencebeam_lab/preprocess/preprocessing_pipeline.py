@@ -214,7 +214,7 @@ def configure_pipeline(p, opt):
 
   _ = (
     annotation_results |
-    "SaveOutput" >> TransformAndLog(
+    "SaveSvgPages" >> TransformAndLog(
       beam.Map(lambda v: save_svg_roots(
         FileSystems.join(
           opt.output_path,

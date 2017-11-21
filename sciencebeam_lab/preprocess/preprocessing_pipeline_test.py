@@ -1,9 +1,19 @@
 from contextlib import contextmanager
+import logging
 from mock import Mock, patch, DEFAULT
 
 import pytest
 
+import apache_beam as beam
 from apache_beam.testing.test_pipeline import TestPipeline
+
+from sciencebeam_lab.utils.collection import (
+  extend_dict
+)
+
+from sciencebeam_lab.beam_utils.utils import (
+  TransformAndLog
+)
 
 from sciencebeam_lab.preprocess.preprocessing_pipeline import (
   parse_args,
@@ -14,14 +24,64 @@ TestPipeline.__test__ = False
 
 PREPROCESSING_PIPELINE = 'sciencebeam_lab.preprocess.preprocessing_pipeline'
 
+BASE_DATA_PATH = 'base'
+PDF_PATH = '*/*.pdf'
+XML_PATH = '*/*.xml'
+
+PDF_FILE_1 = '1/file.pdf'
+XML_FILE_1 = '1/file.xml'
+
+def get_logger():
+  return logging.getLogger(__name__)
+
+def fake_content(path):
+  return 'fake content: %s' % path
+
+def fake_lxml_for_pdf(pdf, path):
+  return 'fake lxml for pdf: %s (%s)' % (pdf, path)
+
+fake_svg_page = lambda i=0: 'fake svg page: %d' % i
+fake_pdf_png_page = lambda i=0: 'fake pdf png page: %d' % i
+fake_block_png_page = lambda i=0: 'fake block png page: %d' % i
+
+_global_tfrecords_mock = Mock(name='_global_tfrecords_mock')
+
+def get_global_tfrecords_mock():
+  # workaround for mock that would get serialized/deserialized before being invoked
+  global _global_tfrecords_mock
+  return _global_tfrecords_mock
+
+@contextmanager
 def patch_preprocessing_pipeline():
-  return patch.multiple(
+  def DummyWritePropsToTFRecord(file_path, extract_props):
+    return TransformAndLog(beam.Map(
+      lambda v: get_global_tfrecords_mock()(file_path, list(extract_props(v)))
+    ), log_fn=lambda x: get_logger().info('tfrecords: %s', x))
+
+  with patch.multiple(
     PREPROCESSING_PIPELINE,
-    find_file_pairs_grouped_by_parent_directory=DEFAULT
-  )
+    find_file_pairs_grouped_by_parent_directory=DEFAULT,
+    read_all_from_path=fake_content,
+    convert_pdf_bytes_to_lxml=fake_lxml_for_pdf,
+    pdf_bytes_to_png_pages=DEFAULT,
+    convert_and_annotate_lxml_content=DEFAULT,
+    svg_page_to_blockified_png_bytes=DEFAULT,
+    save_svg_roots=DEFAULT,
+    save_pages=DEFAULT,
+    WritePropsToTFRecord=DummyWritePropsToTFRecord
+  ) as mocks:
+    # mocks['read_all_from_path'] = lambda path: fake_content(path)
+    yield extend_dict(
+      mocks,
+      {'tfrecords': get_global_tfrecords_mock()}
+    )
 
 def get_default_args():
-  return parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test'])
+  return parse_args([
+    '--data-path=' + BASE_DATA_PATH,
+    '--pdf-path=' + PDF_PATH,
+    '--xml-path=' + XML_PATH
+  ])
 
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')
 @pytest.mark.filterwarnings('ignore::UserWarning')
@@ -54,6 +114,30 @@ class TestConfigurePipeline(object):
       mocks['find_file_pairs_grouped_by_parent_directory'].assert_called_with(
         ['base/lxml', 'base/xml']
       )
+
+  def test_should_write_tfrecords(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.save_tfrecords = True
+      with TestPipeline() as p:
+        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+          (PDF_FILE_1, XML_FILE_1)
+        ]
+        mocks['convert_and_annotate_lxml_content'].return_value = [
+          fake_svg_page(1)
+        ]
+        mocks['pdf_bytes_to_png_pages'].return_value = [
+          fake_pdf_png_page(1)
+        ]
+        mocks['svg_page_to_blockified_png_bytes'].return_value = fake_block_png_page(1)
+        configure_pipeline(p, opt)
+
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
+        'input_uri': PDF_FILE_1,
+        'annotation_uri': PDF_FILE_1 + '.annot',
+        'input_image': fake_pdf_png_page(1),
+        'annotation_image': fake_block_png_page(1)
+      }])
 
 class TestParseArgs(object):
   def test_should_raise_error_without_arguments(self):
