@@ -28,7 +28,7 @@ from sciencebeam_lab.alignment.WordSequenceMatcher import (
   WordSequenceMatcher
 )
 
-from sciencebeam_lab.collection_utils import (
+from sciencebeam_lab.utils.collection import (
   filter_truthy,
   strip_all,
   iter_flatten,

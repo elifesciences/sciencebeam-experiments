@@ -1,4 +1,4 @@
-from sciencebeam_lab.collection_utils import (
+from sciencebeam_lab.utils.collection import (
   flatten
 )
 

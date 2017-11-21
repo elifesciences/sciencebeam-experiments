@@ -4,7 +4,7 @@ from collections import Counter
 
 from six import iteritems
 
-from sciencebeam_lab.collection_utils import (
+from sciencebeam_lab.utils.collection import (
   flatten
 )
 

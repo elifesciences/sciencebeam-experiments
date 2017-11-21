@@ -18,7 +18,7 @@ from sciencebeam_lab.xml_utils import (
   xml_from_string_with_recover
 )
 
-from sciencebeam_lab.collection_utils import (
+from sciencebeam_lab.utils.collection import (
   extend_dict,
   remove_keys_from_dict
 )
