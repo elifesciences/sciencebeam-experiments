@@ -64,6 +64,10 @@ from sciencebeam_lab.preprocess.preprocessing_utils import (
   save_svg_roots
 )
 
+from sciencebeam_lab.preprocess.preprocessing_transforms import (
+  WritePropsToTFRecord
+)
+
 def get_logger():
   return logging.getLogger(__name__)
 
@@ -260,38 +264,19 @@ def configure_pipeline(p, opt):
       )
 
     if opt.save_tfrecords:
-      import tensorflow as tf
-
-      def _bytes_feature(value):
-        return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
-
-      def convert_to_example(input_uri, input_image, annotation_uri, annotation_image):
-        input_uri_bytes = _bytes_feature(input_uri.encode('utf-8'))
-        input_image_bytes = _bytes_feature(input_image)
-        annotation_uri_bytes = _bytes_feature(annotation_uri.encode('utf-8'))
-        annotation_image_bytes = _bytes_feature(annotation_image)
-        return tf.train.Example(features=tf.train.Features(feature={
-          'input_uri': input_uri_bytes,
-          'input_image': input_image_bytes,
-          'annotation_uri': annotation_uri_bytes,
-          'annotation_image': annotation_image_bytes
-        }))
-
       _ = (
         with_block_png_pages |
-        'ConvertToTfExamples' >> beam.FlatMap(lambda v: [
-          convert_to_example(
-            input_uri=v['source_filename'],
-            input_image=pdf_png_page,
-            annotation_uri=v['source_filename'] + '.annot',
-            annotation_image=block_png_page
-          )
-          for pdf_png_page, block_png_page in zip(v['pdf_png_pages'], v['block_png_pages'])
-        ]) |
-        'SerializeToString' >> beam.Map(lambda x: x.SerializeToString()) |
-        'SaveToTfRecords' >> beam.io.WriteToTFRecord(
+        "WriteTFRecords" >> WritePropsToTFRecord(
           FileSystems.join(opt.output_path, 'data'),
-          file_name_suffix='.tfrecord.gz'
+          lambda v: (
+            {
+              'input_uri': v['source_filename'],
+              'input_image': pdf_png_page,
+              'annotation_uri': v['source_filename'] + '.annot',
+              'annotation_image': block_png_page
+            }
+            for pdf_png_page, block_png_page in zip(v['pdf_png_pages'], v['block_png_pages'])
+          )
         )
       )
 
