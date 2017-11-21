@@ -52,23 +52,30 @@ def get_global_tfrecords_mock():
   return _global_tfrecords_mock
 
 @contextmanager
-def patch_preprocessing_pipeline():
+def patch_preprocessing_pipeline(**kwargs):
   def DummyWritePropsToTFRecord(file_path, extract_props):
     return TransformAndLog(beam.Map(
       lambda v: get_global_tfrecords_mock()(file_path, list(extract_props(v)))
     ), log_fn=lambda x: get_logger().info('tfrecords: %s', x))
 
+  always_mock = {
+    'find_file_pairs_grouped_by_parent_directory',
+    'pdf_bytes_to_png_pages',
+    'convert_and_annotate_lxml_content',
+    'svg_page_to_blockified_png_bytes',
+    'save_svg_roots',
+    'save_pages'
+  }
+
   with patch.multiple(
     PREPROCESSING_PIPELINE,
-    find_file_pairs_grouped_by_parent_directory=DEFAULT,
     read_all_from_path=fake_content,
     convert_pdf_bytes_to_lxml=fake_lxml_for_pdf,
-    pdf_bytes_to_png_pages=DEFAULT,
-    convert_and_annotate_lxml_content=DEFAULT,
-    svg_page_to_blockified_png_bytes=DEFAULT,
-    save_svg_roots=DEFAULT,
-    save_pages=DEFAULT,
-    WritePropsToTFRecord=DummyWritePropsToTFRecord
+    WritePropsToTFRecord=DummyWritePropsToTFRecord,
+    **{
+      k: kwargs.get(k, DEFAULT)
+      for k in always_mock
+    }
   ) as mocks:
     # mocks['read_all_from_path'] = lambda path: fake_content(path)
     yield extend_dict(
@@ -138,6 +145,33 @@ class TestConfigurePipeline(object):
         'input_image': fake_pdf_png_page(1),
         'annotation_image': fake_block_png_page(1)
       }])
+
+  def test_should_write_multiple_tfrecords(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.save_tfrecords = True
+      with TestPipeline() as p:
+        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+          (PDF_FILE_1, XML_FILE_1)
+        ]
+        mocks['convert_and_annotate_lxml_content'].return_value = [
+          fake_svg_page(i) for i in [1, 2]
+        ]
+        mocks['pdf_bytes_to_png_pages'].return_value = [
+          fake_pdf_png_page(i) for i in [1, 2]
+        ]
+        mocks['svg_page_to_blockified_png_bytes'].side_effect = [
+          fake_block_png_page(1),
+          fake_block_png_page(2)
+        ]
+        configure_pipeline(p, opt)
+
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
+        'input_uri': PDF_FILE_1,
+        'annotation_uri': PDF_FILE_1 + '.annot',
+        'input_image': fake_pdf_png_page(i),
+        'annotation_image': fake_block_png_page(i)
+      } for i in [1, 2]])
 
 class TestParseArgs(object):
   def test_should_raise_error_without_arguments(self):
