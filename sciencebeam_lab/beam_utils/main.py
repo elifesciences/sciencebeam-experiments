@@ -61,7 +61,7 @@ def add_cloud_args(parser):
   )
   parser.add_argument(
     '--num_workers',
-    default=10,
+    default=1,
     type=int,
     help='The number of workers.'
   )
