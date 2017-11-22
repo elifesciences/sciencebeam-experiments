@@ -138,7 +138,7 @@ def configure_pipeline(p, opt):
           'caught exception (ignoring item): %s, pdf: %s, xml: %s',
           e, v['source_filename'], v['xml_filename'], exc_info=e
         )
-      ))
+      ), error_count='ConvertPdfToLxml_error_count')
     )
   else:
     raise RuntimeError('either lxml-path or pdf-path required')
@@ -155,7 +155,7 @@ def configure_pipeline(p, opt):
           ))
         }),
         {'pdf_content'} # we no longer need the pdf_content
-      ))
+      ), error_count='ConvertPdfToLxml_error_count')
     )
 
     if opt.save_png:
@@ -211,7 +211,7 @@ def configure_pipeline(p, opt):
         'caught exception (ignoring item): %s, source: %s, xml: %s',
         e, v['source_filename'], v['xml_filename'], exc_info=e
       )
-    ))
+    ), error_count='ConvertPdfToLxml_error_count')
   )
 
   _ = (
