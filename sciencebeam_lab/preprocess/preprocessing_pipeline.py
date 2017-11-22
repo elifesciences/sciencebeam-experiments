@@ -197,7 +197,7 @@ def configure_pipeline(p, opt):
 
   annotation_results = (
     (with_pdf_png_pages if opt.save_tfrecords else lxml_xml_file_pairs) |
-    "ConvertAndAnnotate" >> MapOrLog(lambda v: remove_keys_from_dict(
+    "ConvertLxmlToSvgAndAnnotate" >> MapOrLog(lambda v: remove_keys_from_dict(
       extend_dict(v, {
         'svg_pages': list(convert_and_annotate_lxml_content(
           v['lxml_content'], v['xml_content'], xml_mapping,
