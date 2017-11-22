@@ -233,7 +233,7 @@ def svg_page_to_blockified_png_bytes(svg_page, color_map, image_size=None):
   _, _, width, height = viewbox.split()
   image = annotated_blocks_to_image(
     blocks, color_map,
-    width=int(width), height=int(height), background='white',
+    width=float(width), height=float(height), background='white',
     scale_to_size=image_size
   )
   out = BytesIO()

@@ -1,6 +1,7 @@
 import logging
 from collections import deque, namedtuple
 from abc import ABCMeta, abstractmethod
+import math
 
 from six import with_metaclass
 
@@ -234,6 +235,8 @@ class ImageSurface(object):
     if not (width and height):
       raise AttributeError('width and height are required')
 
+    width = int(math.ceil(width))
+    height = int(math.ceil(height))
     if background:
       self.image = Image.new('RGB', (width, height), color_to_tuple(background))
     else:

@@ -76,6 +76,16 @@ class TestAnnotatedBlocksToImage(object):
     }, width=3, height=3)
     assert image.getpixel((0, 0)) == (0, 255, 0, 255)
 
+  def test_should_accept_float_image_size(self):
+    blocks = [
+      AnnotationBlock(TAG1, BoundingBox(0, 0, 1, 1))
+    ]
+
+    image = annotated_blocks_to_image(blocks, color_map={
+      TAG1: (0, 255, 0)
+    }, width=3.1, height=3.9)
+    assert image.size == (4, 4)
+
   def test_should_convert_rect_color_name(self):
     blocks = [
       AnnotationBlock(TAG1, BoundingBox(0, 0, 1, 1))
