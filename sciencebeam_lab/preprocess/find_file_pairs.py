@@ -4,7 +4,7 @@ import logging
 
 from apache_beam.io.filesystems import FileSystems
 
-from sciencebeam_lab.utils.csv_utils import (
+from sciencebeam_lab.utils.csv import (
   csv_delimiter_by_filename,
   write_csv_rows
 )

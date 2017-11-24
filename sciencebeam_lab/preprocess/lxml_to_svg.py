@@ -8,7 +8,7 @@ from sciencebeam_lab.utils.bounding_box import (
   BoundingBox
 )
 
-from sciencebeam_lab.utils.csv_utils import (
+from sciencebeam_lab.utils.csv import (
   open_csv_output,
   write_dict_csv
 )

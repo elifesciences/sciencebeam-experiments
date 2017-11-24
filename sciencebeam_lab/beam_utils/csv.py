@@ -13,7 +13,7 @@ from sciencebeam_lab.beam_utils.utils import (
   TransformAndLog
 )
 
-from sciencebeam_lab.utils.csv_utils import (
+from sciencebeam_lab.utils.csv import (
   csv_delimiter_by_filename
 )
 

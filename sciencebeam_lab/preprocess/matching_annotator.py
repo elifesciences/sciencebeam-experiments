@@ -15,7 +15,7 @@ from six.moves.configparser import ConfigParser
 
 from lxml import etree
 
-from sciencebeam_lab.utils.csv_utils import (
+from sciencebeam_lab.utils.csv import (
   csv_delimiter_by_filename,
   write_csv_row
 )
