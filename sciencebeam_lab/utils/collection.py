@@ -1,5 +1,7 @@
 from six import iteritems
 
+from itertools import groupby
+
 flatten = lambda l: [item for sublist in l for item in sublist]
 
 iter_flatten = lambda l: (item for sublist in l for item in sublist)
@@ -41,3 +43,12 @@ def extend_dict(d, *other_dicts):
   for other_dict in other_dicts:
     d.update(other_dict)
   return d
+
+def groupby_to_dict(iterable, key):
+  return {
+    k: list(v)
+    for k, v in groupby(iterable, key=key)
+  }
+
+def sort_and_groupby_to_dict(iterable, key):
+  return groupby_to_dict(sorted(iterable, key=key), key)

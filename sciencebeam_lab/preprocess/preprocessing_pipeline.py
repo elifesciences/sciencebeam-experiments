@@ -55,7 +55,7 @@ from sciencebeam_lab.preprocess.preprocessing_utils import (
   change_ext,
   relative_path,
   join_if_relative_path,
-  find_file_pairs_grouped_by_parent_directory,
+  find_file_pairs_grouped_by_parent_directory_or_name,
   convert_pdf_bytes_to_lxml,
   convert_and_annotate_lxml_content,
   pdf_bytes_to_png_pages,
@@ -89,7 +89,7 @@ def configure_pipeline(p, opt):
       ]]) |
       "FindFilePairs" >> TransformAndLog(
         beam.FlatMap(
-          lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
+          lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
         ),
         log_prefix='file pairs: ',
         log_level='debug'
@@ -110,7 +110,7 @@ def configure_pipeline(p, opt):
       ]]) |
       "FindFilePairs" >> TransformAndLog(
         beam.FlatMap(
-          lambda patterns: find_file_pairs_grouped_by_parent_directory(patterns)
+          lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
         ),
         log_prefix='file pairs: ',
         log_level='debug'

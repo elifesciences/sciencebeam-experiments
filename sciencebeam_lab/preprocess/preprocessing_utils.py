@@ -21,6 +21,11 @@ from sciencebeam_lab.utils.stopwatch import (
   StopWatchRecorder
 )
 
+from sciencebeam_lab.utils.collection import (
+  groupby_to_dict,
+  sort_and_groupby_to_dict
+)
+
 from sciencebeam_lab.beam_utils.io import (
   dirname,
   find_matching_filenames,
@@ -70,10 +75,16 @@ def get_logger():
   return logging.getLogger(__name__)
 
 def group_files_by_parent_directory(filenames):
-  return {
-    k: list(v)
-    for k, v in groupby(sorted(filenames), lambda x: os.path.dirname(x))
-  }
+  return groupby_to_dict(sorted(filenames), lambda x: os.path.dirname(x))
+
+def strip_ext(filename):
+  # strip of gz, assuming there will be another extension before .gz
+  if filename.endswith('.gz'):
+    filename = filename[:-3]
+  return os.path.splitext(filename)[0]
+
+def group_files_by_name_excl_ext(filenames):
+  return sort_and_groupby_to_dict(filenames, strip_ext)
 
 def zip_by_keys(*dict_list):
   keys = reduce(lambda agg, v: agg | set(v.keys()), dict_list, set())
@@ -82,7 +93,28 @@ def zip_by_keys(*dict_list):
     for k in sorted(keys)
   )
 
-def find_file_pairs_grouped_by_parent_directory(patterns):
+def group_file_pairs_by_parent_directory_or_name(files_by_type):
+  grouped_files_by_pattern = [
+    group_files_by_parent_directory(files) for files in files_by_type
+  ]
+  for files_in_group_by_pattern in zip_by_keys(*grouped_files_by_pattern):
+    if all(len(files or []) == 1 for files in files_in_group_by_pattern):
+      yield tuple([files[0] for files in files_in_group_by_pattern])
+    else:
+      grouped_by_name = [
+        group_files_by_name_excl_ext(files or [])
+        for files in files_in_group_by_pattern
+      ]
+      for files_by_name in zip_by_keys(*grouped_by_name):
+        if all(len(files or []) == 1 for files in files_by_name):
+          yield tuple([files[0] for files in files_by_name])
+        else:
+          get_logger().info(
+            'no exclusively matching files found: %s',
+            [files for files in files_by_name]
+          )
+
+def find_file_pairs_grouped_by_parent_directory_or_name(patterns):
   matching_files_by_pattern = [
     list(find_matching_filenames(pattern)) for pattern in patterns
   ]
@@ -100,17 +132,9 @@ def find_file_pairs_grouped_by_parent_directory(patterns):
   ]
   if patterns_without_files:
     raise RuntimeError('no files found for: %s' % patterns_without_files)
-  grouped_files_by_pattern = [
-    group_files_by_parent_directory(files) for files in matching_files_by_pattern
-  ]
-  for files_in_group_by_pattern in zip_by_keys(*grouped_files_by_pattern):
-    if all(len(files or []) == 1 for files in files_in_group_by_pattern):
-      yield tuple([files[0] for files in files_in_group_by_pattern])
-    else:
-      get_logger().info(
-        'no exclusively matching files found: %s',
-        [files for files in files_in_group_by_pattern]
-      )
+  return group_file_pairs_by_parent_directory_or_name(
+    matching_files_by_pattern
+  )
 
 def convert_pdf_bytes_to_lxml(pdf_content, path=None):
   stop_watch_recorder = StopWatchRecorder()

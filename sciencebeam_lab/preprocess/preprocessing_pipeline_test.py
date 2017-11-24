@@ -59,7 +59,7 @@ def patch_preprocessing_pipeline(**kwargs):
     ), log_fn=lambda x: get_logger().info('tfrecords: %s', x))
 
   always_mock = {
-    'find_file_pairs_grouped_by_parent_directory',
+    'find_file_pairs_grouped_by_parent_directory_or_name',
     'pdf_bytes_to_png_pages',
     'convert_and_annotate_lxml_content',
     'svg_page_to_blockified_png_bytes',
@@ -101,10 +101,10 @@ class TestConfigurePipeline(object):
       opt.pdf_path = 'pdf'
       opt.xml_path = 'xml'
       with TestPipeline() as p:
-        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = []
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = []
         configure_pipeline(p, opt)
 
-      mocks['find_file_pairs_grouped_by_parent_directory'].assert_called_with(
+      mocks['find_file_pairs_grouped_by_parent_directory_or_name'].assert_called_with(
         ['base/pdf', 'base/xml']
       )
 
@@ -116,10 +116,10 @@ class TestConfigurePipeline(object):
       opt.lxml_path = 'lxml'
       opt.xml_path = 'xml'
       with TestPipeline() as p:
-        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = []
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = []
         configure_pipeline(p, opt)
 
-      mocks['find_file_pairs_grouped_by_parent_directory'].assert_called_with(
+      mocks['find_file_pairs_grouped_by_parent_directory_or_name'].assert_called_with(
         ['base/lxml', 'base/xml']
       )
 
@@ -128,7 +128,7 @@ class TestConfigurePipeline(object):
       opt = get_default_args()
       opt.save_tfrecords = True
       with TestPipeline() as p:
-        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
         mocks['convert_and_annotate_lxml_content'].return_value = [
@@ -152,7 +152,7 @@ class TestConfigurePipeline(object):
       opt = get_default_args()
       opt.save_tfrecords = True
       with TestPipeline() as p:
-        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
         mocks['convert_and_annotate_lxml_content'].return_value = [
@@ -193,7 +193,7 @@ class TestConfigurePipeline(object):
       opt.save_tfrecords = True
       opt.min_annotation_percentage = 0.5
       with TestPipeline() as p:
-        mocks['find_file_pairs_grouped_by_parent_directory'].return_value = [
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
         mocks['convert_and_annotate_lxml_content'].return_value = [
