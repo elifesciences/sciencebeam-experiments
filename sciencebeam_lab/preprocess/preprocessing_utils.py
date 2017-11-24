@@ -77,6 +77,12 @@ def get_logger():
 def group_files_by_parent_directory(filenames):
   return groupby_to_dict(sorted(filenames), lambda x: os.path.dirname(x))
 
+def get_ext(filename):
+  name, ext = os.path.splitext(filename)
+  if ext == '.gz':
+    ext = get_ext(name) + ext
+  return ext
+
 def strip_ext(filename):
   # strip of gz, assuming there will be another extension before .gz
   if filename.endswith('.gz'):
