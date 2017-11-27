@@ -2,17 +2,19 @@ import pytest
 
 import apache_beam as beam
 from apache_beam.metrics.metric import MetricsFilter
-from apache_beam.testing.test_pipeline import TestPipeline
 from apache_beam.testing.util import (
   assert_that,
   equal_to
 )
 
+from sciencebeam_lab.beam_utils.testing import (
+  BeamTest,
+  TestPipeline
+)
+
 from sciencebeam_lab.beam_utils.utils import (
   MapOrLog
 )
-
-TestPipeline.__test__ = False
 
 SOME_VALUE_1 = 'value 1'
 SOME_VALUE_CAUSING_EXCEPTION = 1
@@ -23,9 +25,7 @@ def FN_RAISING_EXCEPTION(_):
 
 ERROR_COUNT_METRIC_NAME = 'error_count'
 
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-@pytest.mark.filterwarnings('ignore::UserWarning')
-class TestMapOrLog(object):
+class TestMapOrLog(BeamTest):
   def test_should_pass_through_return_value_if_no_exception_was_raised(self):
     fn = lambda x: x.upper()
     with TestPipeline() as p:

@@ -7,7 +7,7 @@ from io import BytesIO
 from six import string_types
 
 import apache_beam as beam
-from apache_beam.io.textio import WriteToText
+from apache_beam.io.textio import WriteToText, ReadFromText
 
 from sciencebeam_lab.beam_utils.utils import (
   TransformAndLog
@@ -64,4 +64,43 @@ class WriteDictCsv(beam.PTransform):
         file_name_suffix=self.file_name_suffix,
         header=format_csv_rows([self.columns], delimiter=self.delimiter).encode('utf-8')
       )
+    )
+
+def _strip_quotes(s):
+  return s[1:-1] if len(s) >= 2 and s[0] == '"' and s[-1] == '"' else s
+
+class ReadDictCsv(beam.PTransform):
+  """
+  Simplified CSV parser, which does not support:
+  * multi-line values
+  * delimiter within value
+  """
+  def __init__(self, filename, header=True):
+    super(ReadDictCsv, self).__init__()
+    if not header:
+      raise RuntimeError('header required')
+    self.filename = filename
+    self.columns = None
+    self.delimiter = csv_delimiter_by_filename(filename)
+
+  def parse_line(self, line):
+    get_logger().debug('line: %s', line)
+    if line:
+      row = [
+        _strip_quotes(x)
+        for x in line.split(self.delimiter)
+      ]
+      if not self.columns:
+        self.columns = row
+      else:
+        yield {
+          k: x
+          for k, x in zip(self.columns, row)
+        }
+
+  def expand(self, pcoll):
+    return (
+      pcoll |
+      "Read" >> ReadFromText(self.filename) |
+      "Parse" >> beam.FlatMap(self.parse_line)
     )

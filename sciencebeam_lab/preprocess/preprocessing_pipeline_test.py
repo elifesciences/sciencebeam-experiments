@@ -5,7 +5,6 @@ from mock import Mock, patch, DEFAULT
 import pytest
 
 import apache_beam as beam
-from apache_beam.testing.test_pipeline import TestPipeline
 
 from sciencebeam_lab.utils.collection import (
   extend_dict
@@ -15,12 +14,15 @@ from sciencebeam_lab.beam_utils.utils import (
   TransformAndLog
 )
 
+from sciencebeam_lab.beam_utils.testing import (
+  BeamTest,
+  TestPipeline
+)
+
 from sciencebeam_lab.preprocess.preprocessing_pipeline import (
   parse_args,
   configure_pipeline
 )
-
-TestPipeline.__test__ = False
 
 PREPROCESSING_PIPELINE = 'sciencebeam_lab.preprocess.preprocessing_pipeline'
 
@@ -30,6 +32,7 @@ XML_PATH = '*/*.xml'
 
 PDF_FILE_1 = '1/file.pdf'
 XML_FILE_1 = '1/file.xml'
+PDF_XML_FILE_LIST_FILE_1 = 'pdf-xml-files.tsv'
 
 def get_logger():
   return logging.getLogger(__name__)
@@ -48,7 +51,6 @@ _global_tfrecords_mock = Mock(name='_global_tfrecords_mock')
 
 def get_global_tfrecords_mock():
   # workaround for mock that would get serialized/deserialized before being invoked
-  global _global_tfrecords_mock
   return _global_tfrecords_mock
 
 @contextmanager
@@ -65,7 +67,8 @@ def patch_preprocessing_pipeline(**kwargs):
     'svg_page_to_blockified_png_bytes',
     'save_svg_roots',
     'save_pages',
-    'evaluate_document_by_page'
+    'evaluate_document_by_page',
+    'ReadDictCsv'
   }
 
   with patch.multiple(
@@ -91,9 +94,7 @@ def get_default_args():
     '--xml-path=' + XML_PATH
   ])
 
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-@pytest.mark.filterwarnings('ignore::UserWarning')
-class TestConfigurePipeline(object):
+class TestConfigurePipeline(BeamTest):
   def test_should_pass_pdf_and_xml_patterns_to_find_file_pairs_grouped_by_parent_directory(self):
     with patch_preprocessing_pipeline() as mocks:
       opt = get_default_args()
@@ -123,7 +124,36 @@ class TestConfigurePipeline(object):
         ['base/lxml', 'base/xml']
       )
 
-  def test_should_write_tfrecords(self):
+  def test_should_write_tfrecords_from_pdf_xml_file_list(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.pdf_path = None
+      opt.xml_path = None
+      opt.pdf_xml_file_list = '.temp/file-list.tsv'
+      opt.save_tfrecords = True
+      with TestPipeline() as p:
+        mocks['ReadDictCsv'].return_value = beam.Create([{
+          'pdf_url': PDF_FILE_1,
+          'xml_url': XML_FILE_1
+        }])
+        mocks['convert_and_annotate_lxml_content'].return_value = [
+          fake_svg_page(1)
+        ]
+        mocks['pdf_bytes_to_png_pages'].return_value = [
+          fake_pdf_png_page(1)
+        ]
+        mocks['svg_page_to_blockified_png_bytes'].return_value = fake_block_png_page(1)
+        configure_pipeline(p, opt)
+
+      mocks['ReadDictCsv'].assert_called_with(opt.pdf_xml_file_list)
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
+        'input_uri': PDF_FILE_1,
+        'annotation_uri': PDF_FILE_1 + '.annot',
+        'input_image': fake_pdf_png_page(1),
+        'annotation_image': fake_block_png_page(1)
+      }])
+
+  def test_should_write_tfrecords_from_pdf_xml_path(self):
     with patch_preprocessing_pipeline() as mocks:
       opt = get_default_args()
       opt.save_tfrecords = True
@@ -229,6 +259,13 @@ class TestParseArgs(object):
   def test_should_raise_error_if_pdf_and_lxml_path_are_specified(self):
     with pytest.raises(SystemExit):
       parse_args(['--data-path=test', '--pdf-path=test', '--lxml-path=test', '--xml-path=test'])
+
+  def test_should_raise_error_if_pdf_path_specified_without_xml_path(self):
+    with pytest.raises(SystemExit):
+      parse_args(['--data-path=test', '--pdf-path=test'])
+
+  def test_should_not_raise_error_if_pdf_xml_file_list_specified_without_xml_path(self):
+    parse_args(['--data-path=test', '--pdf-xml-file-list=test'])
 
   def test_should_not_raise_error_with_save_lxml_path_together_with_pdf_path(self):
     parse_args(['--data-path=test', '--pdf-path=test', '--save-lxml', '--xml-path=test'])

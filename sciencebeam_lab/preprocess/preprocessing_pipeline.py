@@ -19,7 +19,8 @@ from sciencebeam_lab.beam_utils.utils import (
 )
 
 from sciencebeam_lab.beam_utils.csv import (
-  WriteDictCsv
+  WriteDictCsv,
+  ReadDictCsv
 )
 
 from sciencebeam_lab.beam_utils.io import (
@@ -101,20 +102,30 @@ def configure_pipeline(p, opt):
         'xml_content': read_all_from_path(filenames[1])
       })
     )
-  elif opt.pdf_path:
+  elif opt.pdf_path or opt.pdf_xml_file_list:
+    if opt.pdf_xml_file_list:
+      pdf_xml_url_pairs = (
+        p |
+        "ReadFilePairUrls" >> ReadDictCsv(opt.pdf_xml_file_list) |
+        "TranslateFilePairUrls" >> beam.Map(lambda row: (row['pdf_url'], row['xml_url']))
+      )
+    else:
+      pdf_xml_url_pairs = (
+        p |
+        beam.Create([[
+          join_if_relative_path(opt.base_data_path, s)
+          for s in [opt.pdf_path, opt.xml_path]
+        ]]) |
+        "FindFilePairs" >> TransformAndLog(
+          beam.FlatMap(
+            lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
+          ),
+          log_prefix='file pairs: ',
+          log_level='debug'
+        )
+      )
     pdf_xml_file_pairs = (
-      p |
-      beam.Create([[
-        join_if_relative_path(opt.base_data_path, s)
-        for s in [opt.pdf_path, opt.xml_path]
-      ]]) |
-      "FindFilePairs" >> TransformAndLog(
-        beam.FlatMap(
-          lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
-        ),
-        log_prefix='file pairs: ',
-        log_level='debug'
-      ) |
+      pdf_xml_url_pairs |
       "ReadFileContent" >> beam.Map(lambda filenames: {
         'source_filename': filenames[0],
         'xml_filename': filenames[1],
@@ -351,6 +362,10 @@ def add_main_args(parser):
     '--pdf-path', type=str, required=False,
     help='path to pdf file(s) (alternative to lxml)'
   )
+  source_group.add_argument(
+    '--pdf-xml-file-list', type=str, required=False,
+    help='path to pdf-xml csv/tsv file list'
+  )
 
   parser.add_argument(
     '--save-lxml', default=False, action='store_true',
@@ -385,7 +400,7 @@ def add_main_args(parser):
   )
 
   parser.add_argument(
-    '--xml-path', type=str, required=True,
+    '--xml-path', type=str, required=False,
     help='path to xml file(s)'
   )
   parser.add_argument(
@@ -422,6 +437,9 @@ def process_main_args(parser, parsed_args):
       os.path.dirname(parsed_args.base_data_path),
       os.path.basename(parsed_args.base_data_path + '-results')
     )
+
+  if not parsed_args.xml_path and not parsed_args.pdf_xml_file_list:
+    parser.error('--xml-path required unless --pdf-xml-file-list is specified')
 
   if parsed_args.save_lxml and not parsed_args.pdf_path:
     parser.error('--save-lxml only valid with --pdf-path')
