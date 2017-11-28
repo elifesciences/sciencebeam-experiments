@@ -91,7 +91,8 @@ def get_default_args():
   return parse_args([
     '--data-path=' + BASE_DATA_PATH,
     '--pdf-path=' + PDF_PATH,
-    '--xml-path=' + XML_PATH
+    '--xml-path=' + XML_PATH,
+    '--save-svg'
   ])
 
 class TestConfigurePipeline(BeamTest):
@@ -251,21 +252,28 @@ class TestParseArgs(object):
       parse_args([])
 
   def test_should_not_raise_error_with_minimum_arguments(self):
-    parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test'])
+    parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test', '--save-svg'])
 
   def test_should_not_raise_error_with_lxml_path_instead_of_pdf_path(self):
-    parse_args(['--data-path=test', '--lxml-path=test', '--xml-path=test'])
+    parse_args(['--data-path=test', '--lxml-path=test', '--xml-path=test', '--save-svg'])
+
+  def test_should_raise_error_if_no_output_option_specified(self):
+    with pytest.raises(SystemExit):
+      parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test'])
 
   def test_should_raise_error_if_pdf_and_lxml_path_are_specified(self):
     with pytest.raises(SystemExit):
-      parse_args(['--data-path=test', '--pdf-path=test', '--lxml-path=test', '--xml-path=test'])
+      parse_args([
+        '--data-path=test', '--pdf-path=test', '--lxml-path=test', '--xml-path=test',
+        '--save-svg'
+      ])
 
   def test_should_raise_error_if_pdf_path_specified_without_xml_path(self):
     with pytest.raises(SystemExit):
-      parse_args(['--data-path=test', '--pdf-path=test'])
+      parse_args(['--data-path=test', '--pdf-path=test', '--save-svg'])
 
   def test_should_not_raise_error_if_pdf_xml_file_list_specified_without_xml_path(self):
-    parse_args(['--data-path=test', '--pdf-xml-file-list=test'])
+    parse_args(['--data-path=test', '--pdf-xml-file-list=test', '--save-svg'])
 
   def test_should_not_raise_error_with_save_lxml_path_together_with_pdf_path(self):
     parse_args(['--data-path=test', '--pdf-path=test', '--save-lxml', '--xml-path=test'])
@@ -289,16 +297,22 @@ class TestParseArgs(object):
 
   def test_should_raise_error_if_image_width_was_specified_without_image_height(self):
     with pytest.raises(SystemExit):
-      parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test', '--image-width=100'])
+      parse_args([
+        '--data-path=test', '--pdf-path=test', '--xml-path=test',
+        '--save-png', '--image-width=100'
+      ])
 
   def test_should_raise_error_if_image_height_was_specified_without_image_width(self):
     with pytest.raises(SystemExit):
-      parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test', '--image-height=100'])
+      parse_args([
+        '--data-path=test', '--pdf-path=test', '--xml-path=test',
+        '--save-png', '--image-height=100'
+      ])
 
   def test_should_not_raise_error_if_both_image_width_and_height_are_specified(self):
     parse_args([
       '--data-path=test', '--pdf-path=test', '--xml-path=test',
-      '--image-width=100', '--image-height=100'
+      '--save-png', '--image-width=100', '--image-height=100'
     ])
 
   def test_should_raise_error_if_save_tfrecords_specified_without_pdf_path(self):
@@ -309,4 +323,6 @@ class TestParseArgs(object):
     parse_args(['--data-path=test', '--pdf-path=test', '--xml-path=test', '--save-tfrecords'])
 
   def test_should_not_raise_error_if_save_tfrecords_specified_with_pdf_xml_file_list(self):
-    parse_args(['--data-path=test', '--pdf-xml-file-list=test', '--xml-path=test', '--save-tfrecords'])
+    parse_args([
+      '--data-path=test', '--pdf-xml-file-list=test', '--xml-path=test', '--save-tfrecords'
+    ])

@@ -225,22 +225,23 @@ def configure_pipeline(p, opt):
     ), error_count='ConvertPdfToLxml_error_count')
   )
 
-  _ = (
-    annotation_results |
-    "SaveSvgPages" >> TransformAndLog(
-      beam.Map(lambda v: save_svg_roots(
-        FileSystems.join(
-          opt.output_path,
-          change_ext(
-            relative_path(opt.base_data_path, v['source_filename']),
-            None, '.svg.zip'
-          )
-        ),
-        v['svg_pages']
-      )),
-      log_fn=lambda x: get_logger().info('saved result: %s', x)
+  if opt.save_svg:
+    _ = (
+      annotation_results |
+      "SaveSvgPages" >> TransformAndLog(
+        beam.Map(lambda v: save_svg_roots(
+          FileSystems.join(
+            opt.output_path,
+            change_ext(
+              relative_path(opt.base_data_path, v['source_filename']),
+              None, '.svg.zip'
+            )
+          ),
+          v['svg_pages']
+        )),
+        log_fn=lambda x: get_logger().info('saved result: %s', x)
+      )
     )
-  )
 
   if opt.annotation_evaluation_csv or opt.min_annotation_percentage:
     annotation_evaluation_results = (
@@ -373,6 +374,11 @@ def add_main_args(parser):
   )
 
   parser.add_argument(
+    '--save-svg', default=False, action='store_true',
+    help='save svg pages with annotation tags'
+  )
+
+  parser.add_argument(
     '--save-png', default=False, action='store_true',
     help='save png pages of the original pdf'
   )
@@ -454,6 +460,12 @@ def process_main_args(parser, args):
 
   if sum(1 if x else 0 for x in (args.image_width, args.image_height)) == 1:
     parser.error('--image-width and --image-height need to be specified together')
+
+  if not (args.save_lxml or args.save_svg or args.save_png or args.save_tfrecords):
+    parser.error(
+      'at least one of the output options required:'
+      ' --save-lxml --save-svg --save-png or --save-tfrecords'
+    )
 
 def parse_args(argv=None):
   parser = argparse.ArgumentParser()
