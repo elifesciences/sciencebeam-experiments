@@ -75,15 +75,19 @@ class ReadDictCsv(beam.PTransform):
   * multi-line values
   * delimiter within value
   """
-  def __init__(self, filename, header=True):
+  def __init__(self, filename, header=True, limit=None):
     super(ReadDictCsv, self).__init__()
     if not header:
       raise RuntimeError('header required')
     self.filename = filename
     self.columns = None
     self.delimiter = csv_delimiter_by_filename(filename)
+    self.limit = limit
+    self.row_num = 0
 
   def parse_line(self, line):
+    if self.limit and self.row_num >= self.limit:
+      return
     get_logger().debug('line: %s', line)
     if line:
       row = [
@@ -93,6 +97,7 @@ class ReadDictCsv(beam.PTransform):
       if not self.columns:
         self.columns = row
       else:
+        self.row_num += 1
         yield {
           k: x
           for k, x in zip(self.columns, row)

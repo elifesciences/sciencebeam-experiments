@@ -120,7 +120,7 @@ def group_file_pairs_by_parent_directory_or_name(files_by_type):
             [files for files in files_by_name]
           )
 
-def find_file_pairs_grouped_by_parent_directory_or_name(patterns):
+def find_file_pairs_grouped_by_parent_directory_or_name(patterns, limit=None):
   matching_files_by_pattern = [
     list(find_matching_filenames(pattern)) for pattern in patterns
   ]

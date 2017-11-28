@@ -16,7 +16,8 @@ from sciencebeam_lab.beam_utils.utils import (
 
 from sciencebeam_lab.beam_utils.testing import (
   BeamTest,
-  TestPipeline
+  TestPipeline,
+  get_current_test_context
 )
 
 from sciencebeam_lab.preprocess.preprocessing_pipeline import (
@@ -32,6 +33,8 @@ XML_PATH = '*/*.xml'
 
 PDF_FILE_1 = '1/file.pdf'
 XML_FILE_1 = '1/file.xml'
+PDF_FILE_2 = '2/file.pdf'
+XML_FILE_2 = '2/file.xml'
 PDF_XML_FILE_LIST_FILE_1 = 'pdf-xml-files.tsv'
 
 def get_logger():
@@ -47,11 +50,9 @@ fake_svg_page = lambda i=0: 'fake svg page: %d' % i
 fake_pdf_png_page = lambda i=0: 'fake pdf png page: %d' % i
 fake_block_png_page = lambda i=0: 'fake block png page: %d' % i
 
-_global_tfrecords_mock = Mock(name='_global_tfrecords_mock')
-
 def get_global_tfrecords_mock():
   # workaround for mock that would get serialized/deserialized before being invoked
-  return _global_tfrecords_mock
+  return get_current_test_context().tfrecords_mock
 
 @contextmanager
 def patch_preprocessing_pipeline(**kwargs):
@@ -70,6 +71,8 @@ def patch_preprocessing_pipeline(**kwargs):
     'evaluate_document_by_page',
     'ReadDictCsv'
   }
+  tfrecords_mock = Mock(name='tfrecords_mock')
+  get_current_test_context().tfrecords_mock = tfrecords_mock
 
   with patch.multiple(
     PREPROCESSING_PIPELINE,
@@ -84,7 +87,7 @@ def patch_preprocessing_pipeline(**kwargs):
     # mocks['read_all_from_path'] = lambda path: fake_content(path)
     yield extend_dict(
       mocks,
-      {'tfrecords': get_global_tfrecords_mock()}
+      {'tfrecords': tfrecords_mock}
     )
 
 def get_default_args():
@@ -94,6 +97,27 @@ def get_default_args():
     '--xml-path=' + XML_PATH,
     '--save-svg'
   ])
+
+def _expected_tfrecord_props(pdf_file, page_no=1):
+  return {
+    'input_uri': pdf_file,
+    'annotation_uri': pdf_file + '.annot',
+    'input_image': fake_pdf_png_page(page_no),
+    'annotation_image': fake_block_png_page(page_no)
+  }
+
+def _setup_mocks_for_pages(mocks, page_no_list, file_count=1):
+  mocks['convert_and_annotate_lxml_content'].return_value = [
+    fake_svg_page(i) for i in page_no_list
+  ]
+  mocks['pdf_bytes_to_png_pages'].return_value = [
+    fake_pdf_png_page(i) for i in page_no_list
+  ]
+  mocks['svg_page_to_blockified_png_bytes'].side_effect = [
+    fake_block_png_page(i)
+    for _ in range(file_count)
+    for i in page_no_list
+  ]
 
 class TestConfigurePipeline(BeamTest):
   def test_should_pass_pdf_and_xml_patterns_to_find_file_pairs_grouped_by_parent_directory(self):
@@ -137,22 +161,75 @@ class TestConfigurePipeline(BeamTest):
           'pdf_url': PDF_FILE_1,
           'xml_url': XML_FILE_1
         }])
-        mocks['convert_and_annotate_lxml_content'].return_value = [
-          fake_svg_page(1)
-        ]
-        mocks['pdf_bytes_to_png_pages'].return_value = [
-          fake_pdf_png_page(1)
-        ]
-        mocks['svg_page_to_blockified_png_bytes'].return_value = fake_block_png_page(1)
+        _setup_mocks_for_pages(mocks, [1])
         configure_pipeline(p, opt)
 
-      mocks['ReadDictCsv'].assert_called_with(opt.pdf_xml_file_list)
-      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
-        'input_uri': PDF_FILE_1,
-        'annotation_uri': PDF_FILE_1 + '.annot',
-        'input_image': fake_pdf_png_page(1),
-        'annotation_image': fake_block_png_page(1)
-      }])
+      mocks['ReadDictCsv'].assert_called_with(opt.pdf_xml_file_list, limit=None)
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [
+        _expected_tfrecord_props(PDF_FILE_1)
+      ])
+
+  def test_should_write_multiple_tfrecords_from_pdf_xml_file_list(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.pdf_path = None
+      opt.xml_path = None
+      opt.pdf_xml_file_list = '.temp/file-list.tsv'
+      opt.save_tfrecords = True
+      with TestPipeline() as p:
+        mocks['ReadDictCsv'].return_value = beam.Create([{
+          'pdf_url': PDF_FILE_1,
+          'xml_url': XML_FILE_1
+        }, {
+          'pdf_url': PDF_FILE_2,
+          'xml_url': XML_FILE_2
+        }])
+        _setup_mocks_for_pages(mocks, [1], file_count=2)
+        configure_pipeline(p, opt)
+
+      mocks['ReadDictCsv'].assert_called_with(opt.pdf_xml_file_list, limit=None)
+      for pdf_file in [PDF_FILE_1, PDF_FILE_2]:
+        mocks['tfrecords'].assert_any_call(opt.output_path + '/data', [
+          _expected_tfrecord_props(pdf_file)
+        ])
+      assert mocks['tfrecords'].call_count == 2
+
+  def test_should_pass_limit_to_read_dict_csv(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.pdf_path = None
+      opt.xml_path = None
+      opt.pdf_xml_file_list = '.temp/file-list.tsv'
+      opt.limit = 1
+      opt.save_tfrecords = True
+      with TestPipeline() as p:
+        mocks['ReadDictCsv'].return_value = beam.Create([{
+          'pdf_url': PDF_FILE_1,
+          'xml_url': XML_FILE_1
+        }])
+        _setup_mocks_for_pages(mocks, [1])
+        configure_pipeline(p, opt)
+
+      mocks['ReadDictCsv'].assert_called_with(opt.pdf_xml_file_list, limit=opt.limit)
+      assert mocks['tfrecords'].call_count == 1
+
+  def test_should_pass_limit_to_find_file_pairs_grouped_by_parent_directory_or_name(self):
+    with patch_preprocessing_pipeline() as mocks:
+      opt = get_default_args()
+      opt.base_data_path = 'base'
+      opt.pdf_path = ''
+      opt.lxml_path = 'lxml'
+      opt.xml_path = 'xml'
+      opt.save_tfrecords = True
+      opt.limit = 1
+      with TestPipeline() as p:
+        mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
+          (PDF_FILE_1, XML_FILE_1),
+          (PDF_FILE_2, XML_FILE_2)
+        ]
+        configure_pipeline(p, opt)
+
+      mocks['tfrecords'].call_count == 1
 
   def test_should_write_tfrecords_from_pdf_xml_path(self):
     with patch_preprocessing_pipeline() as mocks:
@@ -162,21 +239,12 @@ class TestConfigurePipeline(BeamTest):
         mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
-        mocks['convert_and_annotate_lxml_content'].return_value = [
-          fake_svg_page(1)
-        ]
-        mocks['pdf_bytes_to_png_pages'].return_value = [
-          fake_pdf_png_page(1)
-        ]
-        mocks['svg_page_to_blockified_png_bytes'].return_value = fake_block_png_page(1)
+        _setup_mocks_for_pages(mocks, [1])
         configure_pipeline(p, opt)
 
-      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
-        'input_uri': PDF_FILE_1,
-        'annotation_uri': PDF_FILE_1 + '.annot',
-        'input_image': fake_pdf_png_page(1),
-        'annotation_image': fake_block_png_page(1)
-      }])
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [
+        _expected_tfrecord_props(PDF_FILE_1)
+      ])
 
   def test_should_write_multiple_tfrecords(self):
     with patch_preprocessing_pipeline() as mocks:
@@ -186,24 +254,13 @@ class TestConfigurePipeline(BeamTest):
         mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
-        mocks['convert_and_annotate_lxml_content'].return_value = [
-          fake_svg_page(i) for i in [1, 2]
-        ]
-        mocks['pdf_bytes_to_png_pages'].return_value = [
-          fake_pdf_png_page(i) for i in [1, 2]
-        ]
-        mocks['svg_page_to_blockified_png_bytes'].side_effect = [
-          fake_block_png_page(1),
-          fake_block_png_page(2)
-        ]
+        _setup_mocks_for_pages(mocks, [1, 2])
         configure_pipeline(p, opt)
 
-      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
-        'input_uri': PDF_FILE_1,
-        'annotation_uri': PDF_FILE_1 + '.annot',
-        'input_image': fake_pdf_png_page(i),
-        'annotation_image': fake_block_png_page(i)
-      } for i in [1, 2]])
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [
+        _expected_tfrecord_props(PDF_FILE_1, page_no=i)
+        for i in [1, 2]
+      ])
 
   def test_should_not_write_tfrecord_below_annotation_threshold(self):
     custom_mocks = dict(
@@ -227,24 +284,13 @@ class TestConfigurePipeline(BeamTest):
         mocks['find_file_pairs_grouped_by_parent_directory_or_name'].return_value = [
           (PDF_FILE_1, XML_FILE_1)
         ]
-        mocks['convert_and_annotate_lxml_content'].return_value = [
-          fake_svg_page(i) for i in [1, 2]
-        ]
-        mocks['pdf_bytes_to_png_pages'].return_value = [
-          fake_pdf_png_page(i) for i in [1, 2]
-        ]
-        mocks['svg_page_to_blockified_png_bytes'].side_effect = [
-          fake_block_png_page(1),
-          fake_block_png_page(2)
-        ]
+        _setup_mocks_for_pages(mocks, [1, 2])
         configure_pipeline(p, opt)
 
-      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [{
-        'input_uri': PDF_FILE_1,
-        'annotation_uri': PDF_FILE_1 + '.annot',
-        'input_image': fake_pdf_png_page(i),
-        'annotation_image': fake_block_png_page(i)
-      } for i in [1]])
+      mocks['tfrecords'].assert_called_with(opt.output_path + '/data', [
+        _expected_tfrecord_props(PDF_FILE_1, page_no=i)
+        for i in [1]
+      ])
 
 class TestParseArgs(object):
   def test_should_raise_error_without_arguments(self):

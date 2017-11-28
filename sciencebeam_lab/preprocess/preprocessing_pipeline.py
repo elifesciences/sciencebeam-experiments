@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import argparse
 import os
 import logging
+from itertools import islice
 
 import apache_beam as beam
 from apache_beam.io.filesystems import FileSystems
@@ -90,7 +91,10 @@ def configure_pipeline(p, opt):
       ]]) |
       "FindFilePairs" >> TransformAndLog(
         beam.FlatMap(
-          lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
+          lambda patterns: islice(
+            find_file_pairs_grouped_by_parent_directory_or_name(patterns),
+            opt.limit
+          )
         ),
         log_prefix='file pairs: ',
         log_level='debug'
@@ -106,7 +110,7 @@ def configure_pipeline(p, opt):
     if opt.pdf_xml_file_list:
       pdf_xml_url_pairs = (
         p |
-        "ReadFilePairUrls" >> ReadDictCsv(opt.pdf_xml_file_list) |
+        "ReadFilePairUrls" >> ReadDictCsv(opt.pdf_xml_file_list, limit=opt.limit) |
         "TranslateFilePairUrls" >> beam.Map(lambda row: (row['pdf_url'], row['xml_url']))
       )
     else:
@@ -118,7 +122,10 @@ def configure_pipeline(p, opt):
         ]]) |
         "FindFilePairs" >> TransformAndLog(
           beam.FlatMap(
-            lambda patterns: find_file_pairs_grouped_by_parent_directory_or_name(patterns)
+            lambda patterns: islice(
+              find_file_pairs_grouped_by_parent_directory_or_name(patterns),
+              opt.limit
+            )
           ),
           log_prefix='file pairs: ',
           log_level='debug'
@@ -366,6 +373,10 @@ def add_main_args(parser):
   source_group.add_argument(
     '--pdf-xml-file-list', type=str, required=False,
     help='path to pdf-xml csv/tsv file list'
+  )
+  parser.add_argument(
+    '--limit', type=int, required=False,
+    help='limit the number of file pairs to process'
   )
 
   parser.add_argument(

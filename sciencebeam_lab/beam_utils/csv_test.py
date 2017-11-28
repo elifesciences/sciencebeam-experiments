@@ -73,3 +73,50 @@ class TestReadDictCsv(BeamTest):
           'a': 'a1',
           'b': 'b1'
         }]))
+
+  def test_should_read_multiple(self, test_context):
+    with patch_module_under_test(ReadFromText=MockReadFromText):
+      test_context.set_file_content('.temp/dummy.tsv', to_csv([
+        ['a', 'b'],
+        ['a1', 'b1'],
+        ['a2', 'b2'],
+        ['a3', 'b3']
+      ], '\t'))
+
+      with TestPipeline() as p:
+        result = (
+          p |
+          ReadDictCsv('.temp/dummy.tsv')
+        )
+        assert_that(result, equal_to([{
+          'a': 'a1',
+          'b': 'b1'
+        }, {
+          'a': 'a2',
+          'b': 'b2'
+        }, {
+          'a': 'a3',
+          'b': 'b3'
+        }]))
+
+  def test_should_limit_number_of_rows(self, test_context):
+    with patch_module_under_test(ReadFromText=MockReadFromText):
+      test_context.set_file_content('.temp/dummy.tsv', to_csv([
+        ['a', 'b'],
+        ['a1', 'b1'],
+        ['a2', 'b2'],
+        ['a3', 'b3']
+      ], '\t'))
+
+      with TestPipeline() as p:
+        result = (
+          p |
+          ReadDictCsv('.temp/dummy.tsv', limit=2)
+        )
+        assert_that(result, equal_to([{
+          'a': 'a1',
+          'b': 'b1'
+        }, {
+          'a': 'a2',
+          'b': 'b2'
+        }]))
