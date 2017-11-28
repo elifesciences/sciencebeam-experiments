@@ -441,14 +441,16 @@ def process_main_args(parser, args):
   if not args.xml_path and not args.pdf_xml_file_list:
     parser.error('--xml-path required unless --pdf-xml-file-list is specified')
 
-  if args.save_lxml and not args.pdf_path:
-    parser.error('--save-lxml only valid with --pdf-path')
+  pdf_path_or_pdf_xml_file_list = args.pdf_path or args.pdf_xml_file_list
 
-  if args.save_png and not args.pdf_path:
-    parser.error('--save-png only valid with --pdf-path')
+  if args.save_lxml and not pdf_path_or_pdf_xml_file_list:
+    parser.error('--save-lxml only valid with --pdf-path or --pdf-xml-file-list')
 
-  if args.save_tfrecords and not args.pdf_path:
-    parser.error('--save-tfrecords only valid with --pdf-path')
+  if args.save_png and not pdf_path_or_pdf_xml_file_list:
+    parser.error('--save-png only valid with --pdf-path or --pdf-xml-file-list')
+
+  if args.save_tfrecords and not pdf_path_or_pdf_xml_file_list:
+    parser.error('--save-tfrecords only valid with --pdf-path or --pdf-xml-file-list')
 
   if sum(1 if x else 0 for x in (args.image_width, args.image_height)) == 1:
     parser.error('--image-width and --image-height need to be specified together')
