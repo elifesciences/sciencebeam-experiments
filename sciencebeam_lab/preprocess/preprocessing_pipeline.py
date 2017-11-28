@@ -429,28 +429,28 @@ def add_main_args(parser):
     help='Output directory to write results to.'
   )
 
-def process_main_args(parser, parsed_args):
-  parsed_args.base_data_path = parsed_args.data_path.replace('/*/', '/')
+def process_main_args(parser, args):
+  args.base_data_path = args.data_path.replace('/*/', '/')
 
-  if not parsed_args.output_path:
-    parsed_args.output_path = os.path.join(
-      os.path.dirname(parsed_args.base_data_path),
-      os.path.basename(parsed_args.base_data_path + '-results')
+  if not args.output_path:
+    args.output_path = os.path.join(
+      os.path.dirname(args.base_data_path),
+      os.path.basename(args.base_data_path + '-results')
     )
 
-  if not parsed_args.xml_path and not parsed_args.pdf_xml_file_list:
+  if not args.xml_path and not args.pdf_xml_file_list:
     parser.error('--xml-path required unless --pdf-xml-file-list is specified')
 
-  if parsed_args.save_lxml and not parsed_args.pdf_path:
+  if args.save_lxml and not args.pdf_path:
     parser.error('--save-lxml only valid with --pdf-path')
 
-  if parsed_args.save_png and not parsed_args.pdf_path:
+  if args.save_png and not args.pdf_path:
     parser.error('--save-png only valid with --pdf-path')
 
-  if parsed_args.save_tfrecords and not parsed_args.pdf_path:
+  if args.save_tfrecords and not args.pdf_path:
     parser.error('--save-tfrecords only valid with --pdf-path')
 
-  if sum(1 if x else 0 for x in (parsed_args.image_width, parsed_args.image_height)) == 1:
+  if sum(1 if x else 0 for x in (args.image_width, args.image_height)) == 1:
     parser.error('--image-width and --image-height need to be specified together')
 
 def parse_args(argv=None):
